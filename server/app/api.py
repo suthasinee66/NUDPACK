@@ -1,14 +1,17 @@
 # server/app/api.py
 from typing import Optional
-from fastapi import FastAPI, HTTPException, Query, Response
+from fastapi import FastAPI, HTTPException, Query, Response, Request
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from .db import SessionLocal, init_db
-from .models import Parcel, DailyCounter, AuditLog
-from .utils import next_queue_number_atomic, format_queue
+from .models import Parcel, DailyCounter, AuditLog, RecycledQueue,CarrierList
+from .utils import next_queue_number_atomic
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import or_, and_
 import io, csv
+from starlette.middleware.sessions import SessionMiddleware
 from datetime import datetime, date
+
 try:
     import pandas as pd
     PANDAS_AVAILABLE = True
@@ -21,10 +24,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 app = FastAPI(title="ParcelServer API")
+from fastapi.staticfiles import StaticFiles
+
+app.mount("/static", StaticFiles(directory="client/static"), name="static")
+
 
 from fastapi.middleware.cors import CORSMiddleware
-
-app = FastAPI(title="ParcelServer API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -36,6 +41,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ✅ ใส่อันนี้แยกออกมา
+app.add_middleware(
+    SessionMiddleware,
+    secret_key="parcel-secret-key"
+)
+
 
 
 # --- resolve project and static directories ---
@@ -54,11 +66,12 @@ if SERVER_STATIC.exists():
 
 
 @app.get("/client")
-def client_ui():
-    client_file = CLIENT_STATIC / "client.html"
-    if client_file.exists():
-        return FileResponse(str(client_file))
-    raise HTTPException(status_code=404, detail=f"client.html not found at {client_file}")
+def client_ui(request: Request):
+
+    if not request.session.get("carrier_id"):
+        return RedirectResponse("/login_client")
+
+    return FileResponse(str(CLIENT_STATIC / "client.html"))
 
 
 @app.get("/admin")
@@ -73,34 +86,98 @@ def admin_ui():
     raise HTTPException(status_code=404, detail=f"admin.html not found (checked {server_admin} and {client_admin})")
 
 
+@app.get("/recipient")
+def recipient_ui():
+    # Serve recipient.html from server/static
+    recipient_file = SERVER_STATIC / "recipient.html"
+    if recipient_file.exists():
+        return FileResponse(str(recipient_file))
+    raise HTTPException(status_code=404, detail=f"recipient.html not found at {recipient_file}")
+
+
+@app.get("/recipient.html")
+def recipient_html():
+    # Explicit path to serve recipient.html (so URL is /recipient.html)
+    recipient_file = SERVER_STATIC / "recipient.html"
+    if recipient_file.exists():
+        return FileResponse(str(recipient_file))
+    raise HTTPException(status_code=404, detail=f"recipient.html not found at {recipient_file}")
+
+
+@app.get("/admin_static/recipient.html")
+def block_admin_static_recipient():
+    # Prevent access to recipient.html via the admin_static mount
+    raise HTTPException(status_code=404, detail="not found")
+
+@app.get("/login_client")
+def login_page():
+    return FileResponse(str(CLIENT_STATIC / "login_client.html"))\
+    
+@app.get("/logout")
+def logout(request: Request):
+    request.session.clear()
+    return RedirectResponse("/login_client")
+
+
+
 # Startup: init DB
 @app.on_event("startup")
 def on_startup():
     init_db()
 
+class LoginIn(BaseModel):
+    carrier_id: int
+    carrier_staff_name: str
+
+@app.post("/api/login_client")
+def login(payload: LoginIn, request: Request):
+
+    request.session["carrier_id"] = payload.carrier_id
+    request.session["carrier_staff_name"] = payload.carrier_staff_name
+
+    return {"ok": True}
+
+
 # Pydantic input model
 class ParcelIn(BaseModel):
     tracking_number: str
-    carrier: Optional[str] = None
+    carrier_staff_name: Optional[str] = None
     recipient_name: Optional[str] = None
-    recipient_phone: Optional[str] = None
+    admin_staff_name: Optional[str] = None
     provisional: bool = False   # if true -> create as PENDING (preview/reservation)
 
 class ConfirmPickupIn(BaseModel):
     recipient_name: Optional[str] = None
     scanner_id: Optional[str] = None
 
+class BulkDeleteIn(BaseModel):
+    ids: Optional[list[int]] = None
+    trackings: Optional[list[str]] = None
+
+
 # ---------------------------
 # Create parcel (check-in / provisional)
 # ---------------------------
 @app.post("/api/parcels")
-def create_parcel(p: ParcelIn):
+def create_parcel(p: ParcelIn, request: Request):
     db = SessionLocal()
     try:
+        carrier_id = request.session.get("carrier_id")
+        carrier_staff = request.session.get("carrier_staff_name")
+        if not carrier_id:
+            raise HTTPException(401, "not logged in")
+
         if not p.tracking_number:
             raise HTTPException(status_code=400, detail="missing tracking_number")
 
-        carrier = (p.carrier or "NUD").upper()
+        carrier = db.query(CarrierList).filter(
+            CarrierList.carrier_id == carrier_id
+        ).first()
+
+
+        if not carrier:
+            raise HTTPException(400, "invalid carrier")
+
 
         # Quick duplicate check
         existing = db.query(Parcel).filter(Parcel.tracking_number == p.tracking_number).first()
@@ -111,19 +188,20 @@ def create_parcel(p: ParcelIn):
         # Generate queue atomically (counter separated by carrier)
         try:
             # prefix kept as 'NUD' per requirement; change to prefix=carrier if desired
-            queue = next_queue_number_atomic(prefix='NUD', carrier=carrier)
+            queue = next_queue_number_atomic()
         except Exception as e:
             # fail early
             raise HTTPException(status_code=500, detail=f"counter error: {e}")
 
-        status = "PENDING" if p.provisional else "RECEIVED"
+        status = "กำลังรอ" if p.provisional else "ยังไม่ได้รับ"
 
         parcel = Parcel(
             tracking_number=p.tracking_number,
-            carrier=carrier,
+            carrier_id=carrier.carrier_id,
+            carrier_staff_name=carrier_staff,
             queue_number=queue,
             recipient_name=p.recipient_name,
-            recipient_phone=p.recipient_phone,
+            admin_staff_name=p.admin_staff_name,
             status=status
         )
         db.add(parcel)
@@ -158,9 +236,9 @@ def confirm_pending(tracking: str):
         p = db.query(Parcel).filter(Parcel.tracking_number == tracking).first()
         if not p:
             raise HTTPException(status_code=404, detail="parcel not found")
-        if p.status != "PENDING":
+        if p.status != "กำลังรอ":
             return {"ok": False, "message": "parcel not pending"}
-        p.status = "RECEIVED"
+        p.status = "ยังไม่ได้รับ"
         db.add(p)
         db.commit()
 
@@ -173,7 +251,12 @@ def confirm_pending(tracking: str):
         except Exception:
             db.rollback()
 
-        return {"ok": True, "tracking": p.tracking_number, "queue": p.queue_number}
+        return {
+            "ok": True,
+            "tracking": p.tracking_number,
+            "queue_number": p.queue_number
+        }
+
     finally:
         db.close()
 
@@ -255,7 +338,7 @@ def get_parcel(tracking: str):
             "queue_number": p.queue_number,
             "status": p.status,
             "recipient_name": p.recipient_name,
-            "recipient_phone": p.recipient_phone,
+            "admin_staff_name": p.admin_staff_name,
             "created_at": p.created_at.isoformat() if p.created_at else None
         }
     finally:
@@ -271,16 +354,16 @@ def pickup_parcel(tracking: str):
         p = db.query(Parcel).filter(Parcel.tracking_number == tracking).first()
         if not p:
             raise HTTPException(status_code=404, detail="not found")
-        if p.status == "PICKED_UP":
-            return {"ok": True, "message": "already picked"}
-        p.status = "PICKED_UP"
+        if p.status == "ได้รับแล้ว":
+            return {"ok": True, "message": "รับไปแล้ว"}
+        p.status = "ได้รับแล้ว"
         db.add(p)
         db.commit()
 
         # audit
         try:
             al = AuditLog(entity="parcel", entity_id=p.id, action="pickup", user="server_ui",
-                          details=f"pickup confirmed")
+                          details=f"ยืนยันการรับแล้ว")
             db.add(al)
             db.commit()
         except Exception:
@@ -294,10 +377,24 @@ def pickup_parcel(tracking: str):
 # List recent parcels
 # ---------------------------
 @app.get("/api/parcels")
-def list_parcels(limit: int = 200):
+def list_parcels(
+    limit: int = 500,
+    status: Optional[str] = Query(None)
+):
     db = SessionLocal()
     try:
-        rows = db.query(Parcel).order_by(Parcel.created_at.desc()).limit(limit).all()
+        q = db.query(Parcel)
+
+        # ✅ filter ตามสถานะ (ถ้ามีส่งมา และไม่ใช่ "ทั้งหมด")
+        if status and status != "ทั้งหมด":
+            q = q.filter(Parcel.status == status)
+
+        rows = (
+            q.order_by(Parcel.created_at.asc())
+             .limit(limit)
+             .all()
+        )
+
         out = []
         for p in rows:
             out.append({
@@ -308,6 +405,7 @@ def list_parcels(limit: int = 200):
                 "recipient_name": p.recipient_name,
                 "created_at": p.created_at.isoformat() if p.created_at else None
             })
+
         return out
     finally:
         db.close()
@@ -347,13 +445,13 @@ def confirm_pickup(tracking: str, payload: ConfirmPickupIn):
         if not p:
             raise HTTPException(status_code=404, detail="parcel not found")
 
-        if p.status == "PICKED_UP":
+        if p.status == "ได้รับแล้ว":
             # already picked — but still allow updating recipient_name if provided?
             if payload.recipient_name and p.recipient_name != payload.recipient_name:
                 p.recipient_name = payload.recipient_name
                 db.add(p)
                 db.commit()
-            return {"ok": False, "message": "already picked"}
+            return {"ok": False, "message": "รับไปแล้ว"}
 
         # (optional) Verify that tracking matches the queue or other checks can go here
 
@@ -361,7 +459,7 @@ def confirm_pickup(tracking: str, payload: ConfirmPickupIn):
         if payload.recipient_name:
             p.recipient_name = payload.recipient_name
 
-        p.status = "PICKED_UP"
+        p.status = "ได้รับแล้ว"
         db.add(p)
         db.commit()
 
@@ -375,7 +473,13 @@ def confirm_pickup(tracking: str, payload: ConfirmPickupIn):
         except Exception:
             db.rollback()
 
-        return {"ok": True, "tracking": p.tracking_number, "queue": p.queue_number, "recipient": p.recipient_name}
+        return {
+            "ok": True,
+            "tracking": p.tracking_number,
+            "queue_number": p.queue_number,
+            "recipient": p.recipient_name
+        }
+
     finally:
         db.close()
 
@@ -427,7 +531,7 @@ def report_summary(period: str = Query("daily", regex="^(daily|monthly|yearly)$"
                 if key != date:
                     continue
             checkin += 1
-            if p.status == "PICKED_UP":
+            if p.status == "ได้รับแล้ว":
                 checkout += 1
             items.append({
                 "id": p.id,
@@ -466,7 +570,7 @@ def reports_timeseries(period: str = Query("daily", regex="^(daily|monthly|yearl
             if key not in agg:
                 agg[key] = {"checkin": 0, "checkout": 0}
             agg[key]["checkin"] += 1
-            if p.status == "PICKED_UP":
+            if p.status == "ได้รับแล้ว":
                 agg[key]["checkout"] += 1
         keys_sorted = sorted(agg.keys())
         if len(keys_sorted) > limit:
@@ -494,7 +598,7 @@ def export_report(period: str = "daily", date: Optional[str] = None, fmt: str = 
       Check-out: M
       Remaining: K
     then an empty line, then the table with columns:
-      id, tracking_number, queue_number, status, recipient_name, recipient_phone, created_at
+      id, tracking_number, queue_number, status, recipient_name, admin_staff_name, created_at
     """
     db = SessionLocal()
     try:
@@ -521,7 +625,7 @@ def export_report(period: str = "daily", date: Optional[str] = None, fmt: str = 
                     continue
 
             checkin += 1
-            if p.status == "PICKED_UP":
+            if p.status == "ได้รับแล้ว":
                 checkout += 1
 
             items.append({
@@ -530,7 +634,7 @@ def export_report(period: str = "daily", date: Optional[str] = None, fmt: str = 
                 "queue_number": p.queue_number,
                 "status": p.status,
                 "recipient_name": p.recipient_name,
-                "recipient_phone": p.recipient_phone,
+                "admin_staff_name": p.admin_staff_name,
                 "created_at": p.created_at.isoformat() if p.created_at else None
             })
 
@@ -554,7 +658,7 @@ def export_report(period: str = "daily", date: Optional[str] = None, fmt: str = 
         writer.writerow([])  # blank line
 
         # write header + rows
-        fieldnames = ["id", "tracking_number", "queue_number", "status", "recipient_name", "recipient_phone", "created_at"]
+        fieldnames = ["id", "tracking_number", "queue_number", "status", "recipient_name", "admin_staff_name", "created_at"]
         writer.writerow(fieldnames)
         for r in items:
             writer.writerow([r.get(f) for f in fieldnames])
@@ -619,4 +723,102 @@ def export_report(period: str = "daily", date: Optional[str] = None, fmt: str = 
         return Response(content=buffer.read(),
                         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         headers={"Content-Disposition": f'attachment; filename="parcel_report_{period}_{date or "all"}.xlsx"'})
+    
+# ---------------------------
+# Admin: Bulk delete parcels
+# ---------------------------
+@app.post("/api/parcels/bulk_delete")
+def bulk_delete_parcels(payload: BulkDeleteIn):
+    if not payload.ids and not payload.trackings:
+        raise HTTPException(status_code=400, detail="ids or trackings required")
+
+    db = SessionLocal()
+    try:
+        q = db.query(Parcel)
+
+        if payload.ids:
+            q = q.filter(Parcel.id.in_(payload.ids))
+        if payload.trackings:
+            q = q.filter(Parcel.tracking_number.in_(payload.trackings))
+
+        to_delete = q.all()
+        if not to_delete:
+            return {"ok": True, "deleted": 0}
+
+        count = len(to_delete)
+
+        for p in to_delete:
+            db.delete(p)
+
+            # audit log
+            try:
+                al = AuditLog(
+                    entity="parcel",
+                    entity_id=p.id,
+                    action="delete",
+                    user="admin_ui",
+                    details=f"tracking={p.tracking_number}"
+                )
+                db.add(al)
+            except Exception:
+                pass
+
+        db.commit()
+        return {"ok": True, "deleted": count}
+
+    finally:
+        db.close()
+
+# ---------------------------
+# Delete provisional parcel (from client preview)
+# ---------------------------
+@app.delete("/api/parcels/{tracking}")
+def delete_parcel(tracking: str):
+    db = SessionLocal()
+    try:
+        p = db.query(Parcel).filter(Parcel.tracking_number == tracking).first()
+        if not p:
+            raise HTTPException(status_code=404, detail="parcel not found")
+
+        if p.status != "กำลังรอ":
+            raise HTTPException(
+                status_code=400,
+                detail="cannot delete parcel that is not PENDING"
+            )
+
+        # ✅ คืนคิว
+        rq = RecycledQueue(
+            carrier_id=p.carrier_id,
+            date=p.created_at.strftime("%Y%m%d"),
+            queue_number=p.queue_number
+        )
+
+
+        db.add(rq)
+
+        db.delete(p)
+        db.commit()
+
+        return {"ok": True, "tracking": tracking}
+
+    finally:
+        db.close()
+
+@app.get("/api/carriers")
+def list_carriers():
+    db = SessionLocal()
+    try:
+        rows = db.query(CarrierList).all()
+        return [
+            {
+                "carrier_id": c.carrier_id,
+                "carrier_name": c.carrier_name,
+                "logo": c.logo
+            }
+            for c in rows
+        ]
+    finally:
+        db.close()
+
+
 # EOF

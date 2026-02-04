@@ -1,0 +1,681 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <title>ParcelServer — Recipient</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body {
+      font-family: Inter, system-ui, Segoe UI, Roboto, sans-serif;
+      margin: 0;
+      background: #f3f6f9;
+      color: #222
+    }
+
+    header {
+      background: #345395;
+      color: #fff;
+      padding: 18px 24px
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 22px auto;
+      padding: 12px
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 8px 22px rgba(20, 30, 60, 0.06)
+    }
+
+    .row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center
+    }
+
+    .btn {
+      background: #f95e07;
+      color: #fff;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer
+    }
+
+    .btn-plain {
+      background: #eee;
+      color: #222;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+      cursor: pointer;
+      margin-left: 8px
+    }
+
+    input,
+    select,
+    textarea {
+      padding: 8px;
+      border-radius: 8px;
+      border: 1px solid #ddd
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse
+    }
+
+    th,
+    td {
+      padding: 8px;
+      border-bottom: 1px solid #eee;
+      text-align: left
+    }
+
+    .muted {
+      color: #666;
+      font-size: 13px
+    }
+
+    .flex {
+      display: flex;
+      gap: 12px;
+      align-items: center
+    }
+
+    .scan-input {
+      font-size: 18px;
+      padding: 10px;
+      border-radius: 8px;
+      border: 2px dashed #ccc;
+      min-width: 320px
+    }
+
+    .small {
+      font-size: 13px;
+      color: #444
+    }
+
+    .pill {
+      display: inline-block;
+      background: #fff;
+      padding: 10px;
+      border-radius: 12px;
+      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.06);
+      margin-right: 8px
+    }
+
+    .notification {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 90%;
+      max-width: 500px;
+      background: #fff;
+      padding: 40px;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      z-index: 9999;
+      animation: popIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+      border-left: 6px solid #28a745;
+      display: none;
+    }
+
+    .notification.show {
+      display: block;
+    }
+
+    .notification.success {
+      border-left-color: #28a745;
+      display: block;
+    }
+
+    .notification.error {
+      border-left-color: #dc3545;
+      display: block;
+    }
+
+    .notification-title {
+      font-weight: bold;
+      margin-bottom: 16px;
+      color: #222;
+      font-size: 22px;
+    }
+
+    .notification-content {
+      font-size: 16px;
+      color: #555;
+      line-height: 1.8;
+    }
+
+    .notification-close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      background: none;
+      border: none;
+      font-size: 28px;
+      cursor: pointer;
+      color: #999;
+      padding: 0;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .notification-close:hover {
+      color: #333;
+    }
+
+    @keyframes popIn {
+      0% {
+        transform: translate(-50%, -50%) scale(0.8);
+        opacity: 0;
+      }
+      100% {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 1;
+      }
+    }
+
+    @keyframes slideIn {
+      from {
+        transform: translateX(400px);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      .notification {
+        width: 85%;
+        max-width: 100%;
+        padding: 28px;
+        border-radius: 12px;
+      }
+
+      .notification-title {
+        font-size: 18px;
+        margin-bottom: 12px;
+      }
+
+      .notification-content {
+        font-size: 14px;
+      }
+
+      .notification-close {
+        top: 12px;
+        right: 12px;
+        font-size: 24px;
+      }
+    }
+
+    /* responsive */
+    @media (max-width:700px) {
+      .scan-input {
+        min-width: 100%
+      }
+
+      .container {
+        padding: 10px
+      }
+    }
+  </style>
+  <!-- Chart.js CDN -->
+  <script src="https://unpkg.com/html5-qrcode"></script>
+</head>
+
+<body>
+  <header>
+    <h1>ParcelServer — Recipient</h1>
+  </header>
+  <div id="notificationContainer"></div>
+  <div class="container">
+
+    <!-- CHECKOUT TAB -->
+    <div id="checkout" class="tabContent">
+      <div class="card">
+        <strong>Checkout (Double-scan)</strong>
+        <div class="muted">Scan to verify, then scan again to confirm pickup. หรือค้นหาก่อนยืนยัน</div>
+
+        <div style="margin-top:10px">
+          <div class="small">Scanner input (keyboard-wedge):</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input id="scanInput" class="scan-input" placeholder="Scan tracking here and press Enter" style="flex:1;min-width:auto" />
+            <button class="btn" onclick="handleScan(document.getElementById('scanInput').value.trim())" style="padding:10px 16px">Enter</button>
+          </div>
+          <div style="margin-top:8px" class="small">Status: <span id="scanStatus">waiting</span></div>
+          <div style="margin-top:12px"><button class="btn" onclick="forceClearPending()">Clear</button></div>
+        </div>
+
+        <div class="row" style="margin-top:8px">
+          <button class="btn" onclick="startCamera()">📷 Scan (Camera)</button>
+          <button class="btn-plain" onclick="stopCamera()">Stop</button>
+        </div>
+
+        <div id="reader" style="margin-top:12px;max-width:320px"></div>
+
+
+        <div id="pendingBox" style="margin-top:12px"></div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <strong>Search / Quick Lookup</strong>
+            <div class="muted">ค้นหาโดย tracking หรือ queue</div>
+          </div>
+          <div class="flex">
+            <input id="searchInput" placeholder="tracking or queue" />
+            <button class="btn" onclick="doSearch()">Search</button>
+          </div>
+        </div>
+        <div id="searchResults" style="margin-top:12px"></div>
+      </div>
+
+      <div class="card">
+        <strong>Detailed view / History</strong>
+        <div id="detailView" class="muted">เลือกพัสดุแล้วจะขึ้นรายละเอียดที่นี่</div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    /* ---------- Globals ---------- */
+    let pendingVerification = null;
+
+    /* ---------- Scan input handling ---------- */
+    const scanInputEl = document.getElementById('scanInput');
+    scanInputEl.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') handleScan(scanInputEl.value.trim());
+    });
+
+    async function handleScan(value) {
+      if (!value) return;
+      // first scan -> verify
+      if (!pendingVerification) {
+        setStatus('verifying...');
+        try {
+          const res = await fetch(`/api/parcels/${encodeURIComponent(value)}/verify`, { method: 'POST' });
+          if (!res.ok) {
+            const err = await safeJson(res).catch(() => ({ detail: res.statusText }));
+            setStatus('Verify failed: ' + (err.detail || res.statusText));
+            scanInputEl.value = '';
+            return;
+          }
+          const info = await res.json();
+          const recipientName = info.recipient_name ?? info.recipient ?? '';
+          const status = (info.status || info.state || '').toString().toUpperCase();
+          // If already picked up, show detail + error notification and do not open pending box
+          if (status === 'PICKED_UP' || status === 'PICKED-UP') {
+            showDetail(info);
+            setStatus('Confirm failed: already picked');
+            showNotification('❌ Already picked', `Tracking <strong>${escapeHtml(info.tracking)}</strong> was already picked up.`, 'error', 5000);
+            scanInputEl.value = '';
+            return;
+          }
+          pendingVerification = {
+            tracking: info.tracking,
+            queue: info.queue_number || info.queue || '',
+            recipient: recipientName,
+            ts: Date.now()
+          };
+          renderPendingBox();
+          showDetail(info);
+          setStatus('Verified — please fill recipient and re-enter tracking to confirm (or scan same tracking again).');
+          scanInputEl.value = '';
+        } catch (err) {
+          setStatus('Network error: ' + err);
+          scanInputEl.value = '';
+        }
+        return;
+      }
+
+      // second scan -> if matches, perform confirm using recipient in pending box
+      if (value === pendingVerification.tracking) {
+        const recipientInput = document.getElementById('pendingRecipientInput');
+        const recipientToSend = recipientInput ? recipientInput.value.trim() : (pendingVerification.recipient || '');
+        await doConfirmPickup(pendingVerification.tracking, recipientToSend);
+        return;
+      } else {
+        setStatus(`Mismatch: scanned ${value} (expected ${pendingVerification.tracking})`);
+        showNotification('❌ Tracking Mismatch', `Scanned: <strong>${escapeHtml(value)}</strong><br>Expected: <strong>${escapeHtml(pendingVerification.tracking)}</strong>`, 'error', 4000);
+        scanInputEl.value = '';
+        return;
+      }
+    }
+
+    /* ---------- Render pending verification box ---------- */
+    function renderPendingBox() {
+      if (!pendingVerification) {
+        document.getElementById('pendingBox').innerHTML = '';
+        return;
+      }
+      const rec = pendingVerification.recipient || '';
+      document.getElementById('pendingBox').innerHTML = `
+    <div style="padding:12px;border-radius:8px;background:#fff7ed;border:1px solid #f2c6a0">
+      <div><strong>Pending:</strong> ${escapeHtml(pendingVerification.tracking)} <small>[${escapeHtml(pendingVerification.queue)}]</small></div>
+      <div class="small" style="margin-top:6px">Recipient (editable): <br>
+        <input id="pendingRecipientInput" style="width:60%;padding:8px;border-radius:6px;border:1px solid #ddd" value="${escapeAttr(rec)}" placeholder="ชื่อผู้รับตามบัตรนิสิต" />
+      </div>
+
+      <div class="small" style="margin-top:8px">Re-enter tracking to confirm (exact match): <br>
+        <input id="pendingConfirmTracking" style="width:40%;padding:8px;border-radius:6px;border:1px solid #ddd" placeholder="Type tracking again to confirm" />
+      </div>
+
+      <div class="small" style="margin-top:8px">You can either:
+        <ul style="margin:6px 0 0 18px;padding:0">
+          <li>Scan the same tracking again (scan input) — or</li>
+          <li>Type same tracking into the "Re-enter tracking" field and press Confirm</li>
+        </ul>
+      </div>
+
+      <div style="margin-top:8px">
+        <button id="pendingConfirmBtn" class="btn" disabled>Confirm pickup</button>
+        <button class="btn-plain" onclick="startCameraConfirm()">📷 Scan to confirm</button>
+        <button class="btn-plain" onclick="forceClearPending()">Cancel</button>
+      </div>
+    </div>`;
+
+      const confirmField = document.getElementById('pendingConfirmTracking');
+      const recipientField = document.getElementById('pendingRecipientInput');
+      const confirmBtn = document.getElementById('pendingConfirmBtn');
+
+      function updatePendingControls() {
+        const a = (recipientField.value || '').trim().length > 0;
+        const b = (confirmField.value || '').trim().length > 0 && (confirmField.value.trim() === pendingVerification.tracking);
+        confirmBtn.disabled = !(a && b);
+      }
+
+      confirmField.addEventListener('input', function() {
+        updatePendingControls();
+        const entered = (confirmField.value || '').trim();
+        if (entered.length > 0 && entered !== pendingVerification.tracking) {
+          // ไม่ตรง แต่ยังไม่แจ้ง (เพราะผู้ใช้อาจยังกำลังพิมพ์)
+        }
+      });
+
+      confirmField.addEventListener('blur', function() {
+        const entered = (confirmField.value || '').trim();
+        if (entered.length > 0 && entered !== pendingVerification.tracking) {
+          showNotification('❌ Tracking Mismatch', `Entered: <strong>${escapeHtml(entered)}</strong><br>Expected: <strong>${escapeHtml(pendingVerification.tracking)}</strong>`, 'error', 4000);
+        }
+      });
+
+      recipientField.addEventListener('input', updatePendingControls);
+
+      confirmBtn.addEventListener('click', async () => {
+        const entered = (confirmField.value || '').trim();
+        if (entered !== pendingVerification.tracking) {
+          showNotification('❌ Tracking Mismatch', `Entered: <strong>${escapeHtml(entered)}</strong><br>Expected: <strong>${escapeHtml(pendingVerification.tracking)}</strong>`, 'error', 4000);
+          return;
+        }
+        const recipientToSend = (document.getElementById('pendingRecipientInput').value || '').trim();
+        await doConfirmPickup(pendingVerification.tracking, recipientToSend);
+      });
+
+      if (recipientField) recipientField.focus();
+    }
+
+    /* ---------- Confirm pickup (send recipient_name with request) ---------- */
+    async function doConfirmPickup(tracking, recipientToSend) {
+      setStatus('confirming pickup...');
+      const confirmTime = new Date();
+      try {
+        const res = await fetch(`/api/parcels/${encodeURIComponent(tracking)}/confirm_pickup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ recipient_name: recipientToSend, scanner_id: 'recipient_ui' })
+        });
+        const j = await safeJson(res);
+        if (res.ok && (j.ok === true || j.ok === undefined)) {
+          setStatus(`Confirmed pickup ${tracking}`);
+          const timeStr = confirmTime.toLocaleString('th-TH', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+          const queueInfo = pendingVerification ? pendingVerification.queue : '';
+          showNotification('✅ Pickup Confirmed', `
+            <div><strong>Tracking:</strong> ${escapeHtml(tracking)}</div>
+            <div><strong>Queue:</strong> ${escapeHtml(queueInfo)}</div>
+            <div><strong>Recipient:</strong> ${escapeHtml(recipientToSend)}</div>
+            <div><strong>Status:</strong> PICKED_UP</div>
+            <div><strong>Confirmed at:</strong> ${escapeHtml(timeStr)}</div>
+          `, 'success', 6000);
+          showDetail({ tracking: tracking, queue: queueInfo, recipient: recipientToSend, status: 'PICKED_UP', confirmed_at: confirmTime });
+          pendingVerification = null;
+          document.getElementById('pendingBox').innerHTML = `<div class="small">Confirmed ${escapeHtml(tracking)}</div>`;
+          // optionally refresh recent list
+          refreshRecentIfExists();
+        } else {
+          setStatus('Confirm failed: ' + (j.message || j.detail || JSON.stringify(j)));
+          showNotification('❌ Confirm Failed', j.message || j.detail || 'Unknown error', 'error', 5000);
+        }
+      } catch (err) {
+        setStatus('Network error: ' + err);
+        showNotification('❌ Network Error', String(err), 'error', 5000);
+      } finally {
+        try { document.getElementById('scanInput').value = ''; } catch (e) { }
+      }
+    }
+
+    /* Force clear pending */
+    function forceClearPending() { pendingVerification = null; document.getElementById('pendingBox').innerHTML = ''; setStatus('waiting'); }
+
+    /* ---------- Search ---------- */
+    document.getElementById('searchInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') doSearch(); });
+    async function doSearch() {
+      const q = document.getElementById('searchInput').value.trim();
+      if (!q) {
+        showNotification('⚠️ Input Required', 'Please enter tracking number or queue', 'error', 3000);
+        return;
+      }
+      const res = await fetch(`/api/parcels/search?q=${encodeURIComponent(q)}`);
+      if (!res.ok) {
+        showNotification('❌ Search Failed', 'Unable to search parcels', 'error', 3000);
+        return;
+      }
+      const data = await res.json();
+      if (data.count === 0) { document.getElementById('searchResults').innerHTML = '<div class="muted">No results</div>'; return; }
+      const rows = data.items.map(i => `<tr>
+    <td>${escapeHtml(i.tracking)}</td>
+    <td>${escapeHtml(i.queue)}</td>
+    <td>${escapeHtml(i.status)}</td>
+    <td>${escapeHtml(i.recipient || '')}</td>
+  </tr>`).join('');
+      document.getElementById('searchResults').innerHTML = `<table><thead><tr><th>tracking</th><th>queue</th><th>status</th><th>recipient</th><th>action</th></tr></thead><tbody>${rows}</tbody></table>`;
+    }
+
+    /* When user clicks Verify in search result -> load into pending via verify endpoint */
+    async function verifyFromSearch(tracking) {
+      setStatus('verifying...');
+      try {
+        const res = await fetch(`/api/parcels/${encodeURIComponent(tracking)}/verify`, { method: 'POST' });
+        if (!res.ok) { setStatus('verify failed'); return; }
+        const info = await res.json();
+        const status = (info.status || info.state || '').toString().toUpperCase();
+        if (status === 'PICKED_UP' || status === 'PICKED-UP') {
+          showDetail(info);
+          setStatus('Confirm failed: already picked');
+          showNotification('❌ Already picked', `Tracking <strong>${escapeHtml(info.tracking)}</strong> was already picked up.`, 'error', 5000);
+          return;
+        }
+        pendingVerification = {
+          tracking: info.tracking,
+          queue: info.queue_number || info.queue || '',
+          recipient: info.recipient_name ?? info.recipient ?? '',
+          ts: Date.now()
+        };
+        renderPendingBox();
+        showDetail(info);
+        setStatus('Verified — fill recipient and re-enter tracking to confirm.');
+      } catch (err) {
+        setStatus('error: ' + err);
+      }
+    }
+
+    /* When user clicks Confirm in search result -> move into pending so staff can fill recipient and re-enter tracking */
+    function confirmFromSearch(tracking, recipFromSearch) {
+      pendingVerification = { tracking: tracking, queue: '', recipient: recipFromSearch || '', ts: Date.now() };
+      renderPendingBox();
+      setStatus('Loaded into pending — edit recipient or re-enter tracking to confirm.');
+    }
+
+    /* ---------- Detailed view ---------- */
+    function showDetail(info) {
+      if (!info) { document.getElementById('detailView').innerHTML = '<div class="muted">No detail</div>'; return; }
+      const t = info.tracking || info.tracking_number || '';
+      const q = info.queue || info.queue_number || '';
+      const r = info.recipient_name || info.recipient || info.recipient;
+      const s = info.status || info.state || '';
+      let timestampHtml = '';
+      if (info.confirmed_at) {
+        const dt = new Date(info.confirmed_at);
+        const timeStr = dt.toLocaleString('th-TH', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+        timestampHtml = `<div><strong>Confirmed at:</strong> ${escapeHtml(timeStr)}</div>`;
+      }
+      document.getElementById('detailView').innerHTML = `<div><strong>Tracking:</strong> ${escapeHtml(t)}</div>
+    <div><strong>Queue:</strong> ${escapeHtml(q)}</div>
+    <div><strong>Recipient:</strong> ${escapeHtml(r || '---')}</div>
+    <div><strong>Status:</strong> ${escapeHtml(s)}</div>
+    ${timestampHtml}
+    <div class="small">(You can verify name vs student card before confirming)</div>`;
+    }
+    
+
+    /* ---------- Utilities ---------- */
+    function setStatus(s) { try { document.getElementById('scanStatus').innerText = s; } catch (e) { } }
+    function escapeHtml(s) { return String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+    function escapeAttr(s) { return (String(s || '').replace(/"/g, '&quot;')); }
+    function escapeJs(s) { return String(s || '').replace(/'/g, "\\'").replace(/"/g, '\\"'); }
+    async function safeJson(res) { try { return await res.json(); } catch (e) { return {}; } }
+
+    /* ---------- Notification System ---------- */
+    function showNotification(title, content, type = 'error', duration = 5000) {
+      const container = document.getElementById('notificationContainer');
+      const notif = document.createElement('div');
+      notif.className = `notification ${type} show`;
+      notif.innerHTML = `
+        <button class="notification-close" onclick="this.parentElement.remove()">×</button>
+        <div class="notification-title">${escapeHtml(title)}</div>
+        <div class="notification-content">${content}</div>
+      `;
+      container.appendChild(notif);
+      
+      if (duration > 0) {
+        setTimeout(() => {
+          if (notif.parentElement) {
+            notif.remove();
+          }
+        }, duration);
+      }
+    }
+
+    /* optional: refresh recent list if you have an element (not implemented here) */
+    function refreshRecentIfExists() {
+      // if you maintain a "recent" list, call /api/parcels and re-render it.
+    }
+
+    /* ---------- Camera Scan (ADD-ON) ---------- */
+    let qrScanner = null;
+    let cameraLocked = false;
+
+    function startCamera() {
+      if (qrScanner) return;
+
+      cameraLocked = false;
+      qrScanner = new Html5Qrcode("reader");
+
+      Html5Qrcode.getCameras().then(cams => {
+        if (!cams.length) {
+          setStatus('No camera found');
+          return;
+        }
+
+        const camId = cams[cams.length - 1].id; // back camera
+
+        qrScanner.start(
+          camId,
+          { fps: 10, qrbox: 250 },
+          text => {
+            if (cameraLocked) return;
+            cameraLocked = true;
+
+            stopCamera();
+
+            // ⭐ จุดสำคัญ: ใช้ logic เดิมทั้งหมด
+            handleScan(text.trim());
+          }
+        );
+      }).catch(err => {
+        setStatus('Camera error');
+        console.error(err);
+      });
+    }
+
+    function stopCamera() {
+      if (!qrScanner) return;
+      qrScanner.stop().then(() => {
+        qrScanner.clear();
+        qrScanner = null;
+        cameraLocked = false;
+      });
+    }
+
+    function startCameraConfirm() {
+      if (qrScanner) return;
+
+      cameraLocked = false;
+      setStatus('Scanning for confirm...');
+
+      qrScanner = new Html5Qrcode("reader");
+
+      Html5Qrcode.getCameras().then(cams => {
+        if (!cams.length) {
+          setStatus('No camera found');
+          return;
+        }
+
+        const camId = cams[cams.length - 1].id;
+
+        qrScanner.start(
+          camId,
+          { fps: 10, qrbox: 250 },
+          text => {
+            if (cameraLocked) return;
+            cameraLocked = true;
+
+            stopCamera();
+
+            const scanned = text.trim();
+
+            // ⭐ สำคัญ: ใช้ logic confirm เดิม
+            if (pendingVerification && scanned === pendingVerification.tracking) {
+              const recipientInput = document.getElementById('pendingRecipientInput');
+              const recipientToSend = recipientInput ? recipientInput.value.trim() : '';
+              doConfirmPickup(scanned, recipientToSend);
+            } else {
+              setStatus(`Mismatch: scanned ${scanned}`);
+            }
+          }
+        );
+      });
+    }
+
+
+  </script>
+</body>
+
+</html>
