@@ -1,8 +1,12 @@
 # server/app/models.py
-from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, ForeignKey, text
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from .db import Base
+from datetime import datetime, timezone, timedelta
+
+def thai_now():
+    return datetime.now(timezone(timedelta(hours=7)))
 
 # พาร्सเซลหลัก
 class Parcel(Base):
@@ -13,13 +17,14 @@ class Parcel(Base):
     carrier_id = Column(Integer, ForeignKey("carrier_list.carrier_id"), index=True)
     carrier = relationship("CarrierList")
     carrier_staff_name = Column(String)
-
+    created_at = Column(DateTime(timezone=True), default=thai_now, index=True)
 
     queue_number = Column(String, index=True, nullable=True)
     status = Column(String, default="IN")
     recipient_name = Column(String, nullable=True)
     admin_staff_name = Column(String)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    picked_up_at = Column(DateTime(timezone=True), index=True, nullable=True)
+
 
 # ตัวนับรายวัน (DailyCounter) — ใช้เก็บเลขลำดับต่อวันแยกตาม carrier
 class DailyCounter(Base):
@@ -29,7 +34,9 @@ class DailyCounter(Base):
     carrier_id = Column(Integer, ForeignKey("carrier_list.carrier_id"), index=True)
     carrier = relationship("CarrierList")
 
-    date = Column(String, index=True, nullable=False)  # 'YYYYMMDD'
+    date = Column(String, index=True, nullable=False)  # YYYYMMDD
+
+    created_at = Column(DateTime(timezone=True), default=thai_now)
     last_seq = Column(Integer, nullable=False, default=0)
 
 # บันทึก audit
@@ -41,7 +48,7 @@ class AuditLog(Base):
     action = Column(String)
     user = Column(String)
     details = Column(Text)
-    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    timestamp = Column(DateTime(timezone=True), default=thai_now)
 
 # models.py
 class RecycledQueue(Base):
@@ -54,7 +61,7 @@ class RecycledQueue(Base):
 
     date = Column(String, index=True, nullable=False)  # YYYYMMDD
     queue_number = Column(String, unique=True, nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime(timezone=True), default=thai_now)
 
 class CarrierList(Base):
     __tablename__ = "carrier_list"

@@ -10,7 +10,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import or_, and_
 import io, csv
 from starlette.middleware.sessions import SessionMiddleware
-from datetime import datetime, date
+from .models import thai_now
+from datetime import datetime, timedelta
 
 try:
     import pandas as pd
@@ -260,68 +261,31 @@ def confirm_pending(tracking: str):
     finally:
         db.close()
 
-# ---------------------------
-# parcel search (tracking or queue)
-# ---------------------------
-# --- resilient search endpoints: /api/parcels/search , /api/parcels/search/ , /api/parcels/find
-from typing import Optional
-from fastapi import Query
-from sqlalchemy import or_, func
-
-def _search_parcels_impl(q: str, limit: int = 200):
+@app.get("/api/parcels/search")
+def search_parcels(q: str):
     db = SessionLocal()
     try:
-        pattern = f"%{q}%"
-        try:
-            filt = or_(Parcel.tracking_number.ilike(pattern), Parcel.queue_number.ilike(pattern))
-        except Exception:
-            filt = or_(func.lower(Parcel.tracking_number).like(pattern.lower()),
-                       func.lower(Parcel.queue_number).like(pattern.lower()))
+        parcels = db.query(Parcel).filter(
+            or_(
+                Parcel.queue_number == q,
+                Parcel.tracking_number == q
+            )
+        ).order_by(Parcel.created_at.desc()).all()
 
-        results = (
-            db.query(Parcel)
-            .filter(filt)
-            .order_by(Parcel.created_at.desc())
-            .limit(limit)
-            .all()
-        )
+        return {
+            "count": len(parcels),
+            "items": [
+                {
+                    "tracking": p.tracking_number,
+                    "queue": p.queue_number,
+                    "status": p.status,
+                    "created_at": p.created_at.isoformat() if p.created_at else None
+                } for p in parcels
+            ]
+        }
 
-        items = []
-        for p in results:
-            items.append({
-                "id": p.id,
-                "tracking": p.tracking_number,
-                "queue": p.queue_number,
-                "status": p.status,
-                "recipient": p.recipient_name,
-                "created_at": p.created_at.isoformat() if p.created_at else None
-            })
-        return {"count": len(items), "items": items}
     finally:
         db.close()
-
-# main route (existing)
-@app.get("/api/parcels/search", summary="Search Parcels")
-def search_parcels(q: Optional[str] = Query(None, min_length=1), limit: int = 200):
-    if not q:
-        return {"count": 0, "items": []}
-    return _search_parcels_impl(q, limit)
-
-# trailing-slash alias
-@app.get("/api/parcels/search/", include_in_schema=False)
-def search_parcels_slash(q: Optional[str] = Query(None, min_length=1), limit: int = 200):
-    if not q:
-        return {"count": 0, "items": []}
-    return _search_parcels_impl(q, limit)
-
-# short alias "find" to be safe if client uses different URL
-@app.get("/api/parcels/find", include_in_schema=False)
-def search_parcels_find(q: Optional[str] = Query(None, min_length=1), limit: int = 200):
-    if not q:
-        return {"count": 0, "items": []}
-    return _search_parcels_impl(q, limit)
-
-
 # ---------------------------
 # Get single parcel
 # ---------------------------
@@ -339,7 +303,8 @@ def get_parcel(tracking: str):
             "status": p.status,
             "recipient_name": p.recipient_name,
             "admin_staff_name": p.admin_staff_name,
-            "created_at": p.created_at.isoformat() if p.created_at else None
+            "created_at": p.created_at.isoformat() if p.created_at else None,
+            "picked_up_at": p.picked_up_at.isoformat() if p.picked_up_at else None
         }
     finally:
         db.close()
@@ -357,6 +322,7 @@ def pickup_parcel(tracking: str):
         if p.status == "ได้รับแล้ว":
             return {"ok": True, "message": "รับไปแล้ว"}
         p.status = "ได้รับแล้ว"
+        p.picked_up_at = thai_now()
         db.add(p)
         db.commit()
 
@@ -379,13 +345,34 @@ def pickup_parcel(tracking: str):
 @app.get("/api/parcels")
 def list_parcels(
     limit: int = 500,
-    status: Optional[str] = Query(None)
+    status: Optional[str] = Query(None),
+    date: Optional[str] = Query(None)   # "today" | "YYYY-MM-DD" | None
 ):
     db = SessionLocal()
     try:
         q = db.query(Parcel)
 
-        # ✅ filter ตามสถานะ (ถ้ามีส่งมา และไม่ใช่ "ทั้งหมด")
+        # ================= DATE FILTER =================
+        if date and date != "all":
+
+            if date == "today":
+                d = datetime.now()
+            else:
+                try:
+                    d = datetime.strptime(date, "%Y-%m-%d")
+                except Exception:
+                    d = None
+
+            if d:
+                start = d.replace(hour=0, minute=0, second=0, microsecond=0)
+                end = start + timedelta(days=1)
+
+                q = q.filter(
+                    Parcel.created_at >= start,
+                    Parcel.created_at < end
+                )
+
+        # ================= STATUS FILTER =================
         if status and status != "ทั้งหมด":
             q = q.filter(Parcel.status == status)
 
@@ -403,10 +390,12 @@ def list_parcels(
                 "queue_number": p.queue_number,
                 "status": p.status,
                 "recipient_name": p.recipient_name,
-                "created_at": p.created_at.isoformat() if p.created_at else None
+                "created_at": p.created_at.isoformat() if p.created_at else None,
+                "picked_up_at": p.picked_up_at.isoformat() if p.picked_up_at else None
             })
 
         return out
+
     finally:
         db.close()
 
@@ -431,7 +420,8 @@ def verify_parcel(tracking: str):
             "tracking": p.tracking_number,
             "queue_number": p.queue_number,
             "recipient_name": p.recipient_name,
-            "status": p.status
+            "status": p.status,
+            "picked_up_at": p.picked_up_at.isoformat() if p.picked_up_at else None
         }
     finally:
         db.close()
@@ -449,6 +439,7 @@ def confirm_pickup(tracking: str, payload: ConfirmPickupIn):
             # already picked — but still allow updating recipient_name if provided?
             if payload.recipient_name and p.recipient_name != payload.recipient_name:
                 p.recipient_name = payload.recipient_name
+                p.picked_up_at = datetime.now()
                 db.add(p)
                 db.commit()
             return {"ok": False, "message": "รับไปแล้ว"}
@@ -460,6 +451,8 @@ def confirm_pickup(tracking: str, payload: ConfirmPickupIn):
             p.recipient_name = payload.recipient_name
 
         p.status = "ได้รับแล้ว"
+        p.picked_up_at = thai_now()   # ✅ สวยสุด ใช้ที่เดียวกับ created_at
+
         db.add(p)
         db.commit()
 
@@ -477,7 +470,8 @@ def confirm_pickup(tracking: str, payload: ConfirmPickupIn):
             "ok": True,
             "tracking": p.tracking_number,
             "queue_number": p.queue_number,
-            "recipient": p.recipient_name
+            "recipient": p.recipient_name,
+            "picked_up_at": p.picked_up_at.isoformat() if p.picked_up_at else None
         }
 
     finally:
@@ -539,7 +533,8 @@ def report_summary(period: str = Query("daily", regex="^(daily|monthly|yearly)$"
                 "queue": p.queue_number,
                 "status": p.status,
                 "recipient": p.recipient_name,
-                "created_at": dt.isoformat() if dt else None
+                "created_at": dt.isoformat() if dt else None,
+                "picked_up_at": p.picked_up_at.isoformat() if p.picked_up_at else None
             })
         remaining = checkin - checkout
         return {"period": period, "date": date, "checkin": checkin, "checkout": checkout, "remaining": remaining, "items": items[:200]}
@@ -635,7 +630,8 @@ def export_report(period: str = "daily", date: Optional[str] = None, fmt: str = 
                 "status": p.status,
                 "recipient_name": p.recipient_name,
                 "admin_staff_name": p.admin_staff_name,
-                "created_at": p.created_at.isoformat() if p.created_at else None
+                "created_at": p.created_at.isoformat() if p.created_at else None,
+                "picked_up_at": p.picked_up_at.isoformat() if p.picked_up_at else None
             })
 
         remaining = checkin - checkout

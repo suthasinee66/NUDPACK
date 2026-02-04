@@ -53,7 +53,7 @@ tailwind.config = {
     <header class="sticky top-0 bg-white/80 backdrop-blur border-b p-4 z-40">
         <div class="max-w-xl mx-auto flex justify-between items-center">
             <div class="flex gap-3 items-center">
-                    <img src="/static/NUDPACK_LOGO2.png" class="w-20 h-20 object-contain" />
+                    <img src="/static/NUDPACK_LOGO2.png" class="w-10 h-10 object-contain" />
             
 
 
@@ -205,16 +205,39 @@ hover:bg-red-100 active:scale-95 transition">
         }
 
         function startCamera() {
-            if (qrScanner) return
-            qrScanner = new Html5Qrcode("reader")
-            Html5Qrcode.getCameras().then(c => {
-                qrScanner.start(c[0].id, { fps: 10, qrbox: 220 }, txt => {
-                    if (scanningLocked) return
-                    scanningLocked = true
-                    handleScan(txt).finally(() => setTimeout(stopCamera, 300))
-                })
-            })
+    if (qrScanner) return
+
+    qrScanner = new Html5Qrcode("reader")
+
+    Html5Qrcode.getCameras().then(cams => {
+
+        if (!cams.length) {
+            alert("ไม่พบกล้อง")
+            return
         }
+
+        // หา rear / back camera
+        const backCam = cams.find(c =>
+            c.label.toLowerCase().includes("back") ||
+            c.label.toLowerCase().includes("rear")
+        )
+
+        // ถ้าไม่เจอ ใช้ตัวสุดท้ายแทน
+        const camId = backCam ? backCam.id : cams[cams.length - 1].id
+
+        qrScanner.start(
+            camId,
+            { fps: 10, qrbox: 220 },
+            txt => {
+                if (scanningLocked) return
+                scanningLocked = true
+
+                handleScan(txt.trim())
+                    .finally(() => setTimeout(stopCamera, 300))
+            }
+        )
+    })
+}
 
         function stopCamera() {
             if (!qrScanner) return

@@ -2,157 +2,343 @@
 <html lang="th">
 
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>NUDPACK Admin</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NUDPACK Admin</title>
 
-<script src="https://cdn.tailwindcss.com?plugins=forms"></script>
-<script src="https://unpkg.com/html5-qrcode"></script>
+  <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+  <script src="https://unpkg.com/html5-qrcode"></script>
 
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai+Looped:wght@100..900&display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai+Looped:wght@100..900&display=swap"
+    rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
 
-<script>
-tailwind.config={
-darkMode:"class",
-theme:{extend:{
-colors:{primary:"#f95f06"},
-fontFamily:{display:["Noto Sans Thai Looped","sans-serif"]}
-}}
-}
-</script>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: { primary: "#f95f06" },
+          fontFamily: { display: ["Noto Sans Thai Looped", "sans-serif"] }
+        }
+      }
+    }
+  </script>
 
-<style>
-.scan-zone{border:2px dashed #e9d8ce}
-.latest{background:#fff6e5}
-</style>
+  <style>
+    .scan-zone {
+      border: 2px dashed #e9d8ce
+    }
+
+    .latest {
+      background: #fff6e5
+    }
+
+    .modeBtn {
+      text-align: center;
+      padding: 10px 0;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: .2s;
+      background: white;
+    }
+
+    .activeMode {
+      background: #f95f06;
+      color: white;
+      box-shadow: 0 4px 10px rgba(249, 95, 6, .3);
+    }
+
+    input[type="radio"] {
+      display: none !important;
+    }
+  </style>
 </head>
 
-<body class="bg-[#fafafa] font-display">
+<body class="bg-[#fafafa] font-display" onload="loadWaitingParcels()">
 
-<header class="sticky top-0 bg-white/80 backdrop-blur border-b p-4">
-<div class="max-w-xl mx-auto flex justify-between items-center">
-<div class="flex gap-3 items-center">
-<img src="/static/NUDPACK_LOGO2.png" class="w-14"/>
-<div>
-<h2 class="font-bold">NUDPACK ADMIN</h2>
-<p class="text-xs text-orange-400">Parcel Checkout</p>
-</div>
-</div>
+  <header class="sticky top-0 bg-white/80 backdrop-blur border-b p-4">
+    <div class="max-w-xl mx-auto flex justify-between items-center">
+      <div class="flex gap-3 items-center">
+        <img src="/static/NUDPACK_LOGO2.png" class="w-14" />
+        <div>
+          <h2 class="font-bold">NUDPACK ADMIN</h2>
+          <p class="text-xs text-orange-400">Parcel Checkout</p>
+        </div>
+      </div>
 
-<button onclick="logout()" class="text-xs text-red-500">ออกจากระบบ</button>
-</div>
-</header>
-
-<main class="max-w-xl mx-auto pb-40">
-
-<!-- ================= Scan ================= -->
-<section class="p-4">
-  <div class="bg-white rounded-xl p-4 scan-zone">
-
-    <label class="text-sm text-primary font-semibold">Scan / Enter Tracking</label>
-
-    <div class="flex mt-2">
-      <input id="scanInput" class="flex-1 border rounded-l-lg h-12 px-3"/>
-
-      <button onclick="handleScan(scanInput.value.trim())"
-        class="bg-primary text-white px-4 rounded-r-lg">
-        <span class="material-symbols-outlined">barcode_scanner</span>
-      </button>
+      <button onclick="logout()" class="text-xs text-red-500">ออกจากระบบ</button>
     </div>
+  </header>
 
-    <div class="flex gap-3 mt-4">
-      <button onclick="startCamera()" class="flex-1 bg-primary text-white rounded-lg h-12">เปิดกล้อง</button>
-      <button onclick="stopCamera()" class="flex-1 border rounded-lg h-12">ปิดกล้อง</button>
-    </div>
+  <main class="max-w-xl mx-auto pb-40">
 
-    <div id="reader" class="mt-3"></div>
-    <div id="scanStatus" class="text-sm mt-2"></div>
+    <!-- ================= Scan ================= -->
+    <section class="p-4">
+      <div class="bg-white rounded-xl p-4 scan-zone">
 
-  </div>
-</section>
+        <label class="text-sm text-primary font-semibold">Scan / Enter Tracking</label>
 
-<!-- ================= Filter ================= -->
+        <div class="flex mt-2">
+          <input id="scanInput" class="flex-1 border rounded-l-lg h-12 px-3" />
+
+          <button onclick="handleScan(scanInput.value.trim())" class="bg-primary text-white px-4 rounded-r-lg">
+            <span class="material-symbols-outlined">barcode_scanner</span>
+          </button>
+        </div>
+
+        <div class="flex gap-3 mt-4">
+          <button onclick="startCamera()"
+            class="flex-1 bg-primary text-white rounded-lg h-12 flex justify-center items-center gap-2">
+            <span class="material-symbols-outlined">photo_camera</span>เปิดกล้อง
+          </button>
+          <button onclick="stopCamera()" class="flex-1 border rounded-lg h-12">ปิดกล้อง</button>
+        </div>
+
+        <div id="cameraOverlay" class="fixed inset-0 bg-black/70 hidden z-50 flex items-center justify-center">
+
+          <div class="bg-white rounded-2xl p-4 w-80 shadow-xl">
+
+            <div id="reader"></div>
+
+            <button onclick="stopCamera()" class="mt-4 w-full bg-orange-500 text-white py-2 rounded-xl">
+              ปิดกล้อง
+            </button>
+
+          </div>
+
+        </div>
+        <div id="scanStatus" class="text-sm mt-2"></div>
+
+      </div>
+    </section>
 <section class="px-4 mt-2">
-  <select id="statusFilter"
-    class="border rounded-lg px-3 py-2 text-sm w-full"
-    onchange="loadWaitingParcels()">
+  
 
-    <option value="ทั้งหมด">📦 ทั้งหมด</option>
-    <option value="กำลังรอ">⏳ กำลังรอ</option>
-    <option value="ยังไม่ได้รับ">🕓 ยังไม่ได้รับ</option>
-    <option value="ได้รับแล้ว">✅ ได้รับแล้ว</option>
+    <!-- queue search -->
+    <input
+      id="queueSearch"
+      placeholder="ค้นหาเลขคิว"
+      oninput="searchQueue(this.value)"
+      class="border px-4 py-2 rounded-xl text-sm w-40 shadow-sm
+             focus:ring-2 focus:ring-orange-400 focus:outline-none"
+    >
 
-  </select>
-</section>
+    <!-- search date -->
+    
 
-<!-- ================= Parcel List ================= -->
-<section class="px-4 mt-3">
-  <h3 class="font-semibold mb-2">รายการพัสดุ</h3>
-  <div id="parcelList"></div>
-</section>
-
-
-
-<!-- ================= Detail ================= -->
-<section class="px-4 mt-6">
-  <h3 class="font-bold mb-2">Active Parcel</h3>
-  <div id="detailView" class="bg-white rounded-xl p-4 text-sm"></div>
-</section>
-
-</main>
-
-
-<!-- popup -->
-<div id="queuePopup" class="fixed inset-0 hidden bg-black/40 items-center justify-center">
-<div class="bg-white rounded-xl p-6 w-72 text-center">
-<p class="text-gray-400 text-sm">Queue</p>
-<div id="popupQueue" class="text-6xl text-primary font-bold"></div>
-<p id="popupTracking" class="text-xs text-gray-500 mt-2"></p>
-<button onclick="closePopup()" class="mt-4 w-full bg-primary text-white rounded-lg py-2">ตกลง</button>
-</div>
-</div>
-
-<!-- Pending Verify Popup -->
-<div id="pendingPopup" class="fixed inset-0 hidden bg-black/40 items-center justify-center z-50">
-  <div class="bg-white rounded-xl p-5 w-[90%] max-w-md relative">
-
-    <!-- close -->
-    <button onclick="forceClearPending()"
-      class="absolute right-3 top-3 text-gray-400 hover:text-red-500 text-xl">
-      ✕
-    </button>
-
-    <h3 class="font-bold mb-2 text-primary">Pending Verification</h3>
-
-    <div id="verifyBox"></div>
 
   </div>
-</div>
+</section>
+<section class="px-4 mt-2">
+  <div class="mb-3 flex gap-2 items-center">
+<div class="mb-3 flex gap-2 items-center">
 
-<!-- Already Picked Popup -->
-<div id="alreadyPopup" class="fixed inset-0 hidden bg-black/40 items-center justify-center z-50">
-  <div class="bg-white rounded-xl p-5 w-[90%] max-w-md relative">
-
-    <button onclick="closeAlreadyPopup()"
-      class="absolute right-3 top-3 text-gray-400 hover:text-red-500 text-xl">
-      ✕
+    <!-- date -->
+    <input
+  id="dateFilter"
+  type="text"
+  placeholder="เลือกวันที่"
+  onfocus="this.type='date'"
+  onblur="if(!this.value)this.type='text'"
+  class="border px-2 py-2 rounded-lg text-xs shadow-sm w-28
+         focus:ring-2 focus:ring-orange-400 focus:outline-none"
+/>
+             
+    <!-- today -->
+    <button
+      onclick="clearDateFilter()"
+      class="border px-4 py-2 rounded-xl text-sm hover:bg-gray-50"
+    >
+      วันนี้
     </button>
 
-    <h3 class="font-bold text-red-500 mb-2">⚠ พัสดุนี้ได้รับแล้ว</h3>
+    <!-- all -->
+    <button
+      onclick="loadWaitingParcels()"
+      class="border px-4 py-2 rounded-xl text-sm hover:bg-gray-50"
+    >
+      ทุกวัน
+    </button>
+    <button
+      onclick="applyDateFilter()"
+      class="bg-orange-500 hover:bg-orange-600 transition text-white px-4 py-2 rounded-xl text-sm shadow"
+    >
+      ค้นหา
+    </button>
+  </div>
+</section>
+    
+    
 
-    <div id="alreadyBox" class="text-sm"></div>
+    <!-- ================= Parcel List ================= -->
+    <section class="px-4 mt-3">
+  <div class="flex items-center justify-between mb-2">
 
-    <button onclick="closeAlreadyPopup()"
-      class="mt-4 w-full bg-primary text-white rounded-lg py-2">
+    <h3 class="font-semibold">รายการพัสดุ</h3>
+
+    <!-- status filter (small right side) -->
+    <select
+      id="statusFilter"
+      onchange="loadWaitingParcels()"
+      class="appearance-none rounded-lg border border-gray-300 bg-white
+             px-3 py-1.5 text-xs w-36
+             shadow-sm transition
+             hover:border-orange-300
+             focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-orange-400"
+    >
+      <option value="ทั้งหมด" selected>ทั้งหมด</option>
+      <option value="ยังไม่ได้รับ">ยังไม่ได้รับ</option>
+      <option value="ได้รับแล้ว">ได้รับแล้ว</option>
+      <option value="กำลังรอ">กำลังรอ</option>
+    </select>
+
+  </div>
+
+  <div id="parcelList" class="flex flex-col gap-2"></div>
+</section>
+
+
+
+
+
+  </main>
+
+
+  <!-- popup -->
+  <div id="queuePopup" class="fixed inset-0 hidden bg-black/40 items-center justify-center">
+    <div class="bg-white rounded-xl p-6 w-72 text-center">
+      <p class="text-gray-400 text-sm">Queue</p>
+      <div id="popupQueue" class="text-6xl text-primary font-bold"></div>
+      <p id="popupTracking" class="text-xs text-gray-500 mt-2"></p>
+      <button onclick="closePopup()" class="mt-4 w-full bg-primary text-white rounded-lg py-2">ตกลง</button>
+    </div>
+  </div>
+
+  <!-- Pending Verify Popup -->
+  <div id="pendingPopup" class="fixed inset-0 hidden bg-black/40 items-center justify-center z-50">
+    <div class="bg-white rounded-xl p-5 w-[90%] max-w-md relative">
+
+      <!-- close -->
+      <button onclick="forceClearPending()" class="absolute right-3 top-3 text-gray-400 hover:text-red-500 text-xl">
+        ✕
+      </button>
+
+      <h3 class="font-bold mb-2 text-primary">Pending Verification</h3>
+
+      <div id="verifyBox"></div>
+      <div id="readerConfirm" class="mt-3"></div>
+
+    </div>
+  </div>
+
+  <!-- Already Picked Popup -->
+  <div id="alreadyPopup" class="fixed inset-0 hidden bg-black/40 items-center justify-center z-50">
+    <div class="bg-white rounded-xl p-5 w-[90%] max-w-md relative">
+
+      <button onclick="closeAlreadyPopup()" class="absolute right-3 top-3 text-gray-400 hover:text-red-500 text-xl">
+        ✕
+      </button>
+
+      <h3 class="font-bold text-red-500 mb-2">⚠ พัสดุนี้ได้รับแล้ว</h3>
+
+      <div id="alreadyBox" class="text-sm"></div>
+
+      <button onclick="closeAlreadyPopup()" class="mt-4 w-full bg-primary text-white rounded-lg py-2">
+        ตกลง
+      </button>
+
+    </div>
+  </div>
+
+  <!-- Recipient Required Popup -->
+  <div id="recipientPopup" class="fixed inset-0 hidden bg-black/40 items-center justify-center z-50">
+    <div class="bg-white rounded-xl p-5 w-72 text-center">
+
+      <h3 class="font-bold text-primary mb-2">⚠ ต้องกรอกชื่อผู้รับ</h3>
+
+      <p class="text-sm text-gray-600">
+        กรุณากรอกชื่อผู้รับก่อนสแกนยืนยัน
+      </p>
+
+      <button onclick="closeRecipientPopup()" class="mt-4 w-full bg-primary text-white rounded-lg py-2">
+        ตกลง
+      </button>
+
+    </div>
+  </div>
+  <!-- Mismatch Popup -->
+  <div id="mismatchPopup" class="fixed inset-0 hidden bg-black/40 items-center justify-center z-50">
+    <div class="bg-white rounded-xl p-5 w-72 text-center">
+
+      <h3 class="font-bold text-red-500 mb-2">❌ เลขพัสดุไม่ตรง</h3>
+
+      <p class="text-sm text-gray-600">
+        กรุณาตรวจสอบเลขพัสดุอีกครั้ง
+      </p>
+
+      <button onclick="closeMismatchPopup()" class="mt-4 w-full bg-primary text-white rounded-lg py-2">
+        ตกลง
+      </button>
+
+    </div>
+  </div>
+  <div id="confirmCameraOverlay" class="fixed inset-0 bg-black/70 hidden z-50 flex items-center justify-center">
+
+    <div class="bg-white rounded-2xl p-4 w-80 shadow-xl">
+
+      <div id="confirmReader"></div>
+
+      <button onclick="stopConfirmCamera()" class="mt-4 w-full bg-orange-500 text-white py-2 rounded-xl">
+        ปิดกล้อง
+      </button>
+
+    </div>
+
+  </div>
+  <!-- Not Found Popup -->
+  <div id="notFoundPopup" class="fixed inset-0 hidden bg-black/40 items-center justify-center z-50">
+    <div class="bg-white rounded-xl p-5 w-72 text-center">
+
+      <h3 class="font-bold text-red-500 mb-2">❌ ไม่พบพัสดุ</h3>
+
+      <p class="text-sm text-gray-600">
+        ไม่พบเลขพัสดุนี้ในระบบ
+      </p>
+
+      <button onclick="closeNotFoundPopup()" class="mt-4 w-full bg-primary text-white rounded-lg py-2">
+        ตกลง
+      </button>
+
+    </div>
+  </div>
+
+  <div id="successPopup"
+ class="fixed inset-0 hidden items-center justify-center bg-black/40 z-50">
+
+  <div class="bg-white rounded-2xl p-8 flex flex-col items-center w-72">
+
+    <!-- orange check -->
+    <div class="w-20 h-20 rounded-full bg-orange-500 flex items-center justify-center shadow-lg">
+      <span class="material-symbols-outlined text-white text-5xl">check</span>
+    </div>
+
+    <div class="mt-4 text-lg font-semibold">
+      รับพัสดุเรียบร้อยแล้ว
+    </div>
+
+    <div id="successInfo"
+         class="mt-2 text-sm text-gray-500 text-center"></div>
+
+    <!-- OK button -->
+    <button onclick="closeSuccessPopup()"
+      class="mt-5 bg-orange-500 hover:bg-orange-600 text-white px-6 py-2 rounded-lg">
       ตกลง
     </button>
 
   </div>
 </div>
-
-
-<script>
+  <script>
     /* ---------------- Tabs ---------------- */
     document.querySelectorAll('.tabBtn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -166,6 +352,13 @@ fontFamily:{display:["Noto Sans Thai Looped","sans-serif"]}
 
     /* ---------- Globals ---------- */
     let pendingVerification = null;
+
+    // scanners (ต้องอยู่บนสุดก่อน function ใด ๆ)
+    let mainScanner = null;
+    let confirmScanner = null;
+    let cameraLocked = false;
+    let confirmStopping = false
+
 
     /* ---------- Scan input handling ---------- */
     const scanInputEl = document.getElementById('scanInput');
@@ -181,6 +374,15 @@ fontFamily:{display:["Noto Sans Thai Looped","sans-serif"]}
         try {
           const res = await fetch(`/api/parcels/${encodeURIComponent(value)}/verify`, { method: 'POST' });
           if (!res.ok) {
+
+            // ===== ไม่พบพัสดุ =====
+            if (res.status === 404) {
+              openNotFoundPopup()
+              setStatus("ไม่พบพัสดุในระบบ")
+              scanInputEl.value = ''
+              return
+            }
+
             const err = await safeJson(res).catch(() => ({ detail: res.statusText }));
             setStatus('Verify failed: ' + (err.detail || res.statusText));
             scanInputEl.value = '';
@@ -195,11 +397,12 @@ fontFamily:{display:["Noto Sans Thai Looped","sans-serif"]}
               <div><b>Queue:</b> ${escapeHtml(info.queue_number || info.queue || "-")}</div>
               <div><b>ผู้รับ:</b> ${escapeHtml(info.recipient_name || info.recipient || "-")}</div>
               <div><b>สถานะ:</b> ได้รับพัสดุแล้ว</div>
+              <div><b>เวลาได้รับ:</b> ${escapeHtml(info.picked_up_at ? new Date(info.picked_up_at).toLocaleString("th-TH", { timeZone: "Asia/Bangkok" }) : "-")}</div>
             `
 
             openAlreadyPopup()
             setStatus("พัสดุนี้ได้รับแล้ว")
-            scanInputEl.value=""
+            scanInputEl.value = ""
             return
           }
 
@@ -230,9 +433,7 @@ fontFamily:{display:["Noto Sans Thai Looped","sans-serif"]}
         await doConfirmPickup(pendingVerification.tracking, recipientToSend);
         return;
       } else {
-        setStatus(`Mismatch: scanned ${value} (expected ${pendingVerification.tracking})`);
-        scanInputEl.value = '';
-        return;
+        openMismatchPopup()
       }
     }
 
@@ -244,28 +445,46 @@ fontFamily:{display:["Noto Sans Thai Looped","sans-serif"]}
       }
       const rec = pendingVerification.recipient || '';
       document.getElementById('verifyBox').innerHTML = `
-<div style="padding:12px;border-radius:8px;background:#fff7ed;border:1px solid #f2c6a0">
 
   <div>
     <strong>พัสดุรอยืนยัน:</strong>
     ${escapeHtml(pendingVerification.tracking)}
-    <small>[คิว ${escapeHtml(pendingVerification.queue)}]</small>
+    <strong>เลขคิว:</strong>
+    ${escapeHtml(pendingVerification.queue)}
   </div>
 
   <div class="small" style="margin-top:6px">
-    ชื่อผู้รับ (แก้ไขได้):<br>
+    ชื่อผู้รับ :<br>
     <input id="pendingRecipientInput"
       style="width:100%;padding:8px;border-radius:6px;border:1px solid #ddd"
       value="${escapeAttr(rec)}"
       placeholder="กรอกชื่อผู้รับตามบัตรนิสิต" />
   </div>
+<!-- Confirm mode toggle -->
+<div class="mt-3 flex bg-white rounded-xl p-1 text-sm shadow-lg shadow-orange-200/60">
 
-  <div class="small" style="margin-top:8px">
-    กรอก Tracking ซ้ำเพื่อยืนยัน:<br>
-    <input id="pendingConfirmTracking"
-      style="width:100%;padding:8px;border-radius:6px;border:1px solid #ddd"
-      placeholder="พิมพ์ Tracking เดิมอีกครั้ง" />
-  </div>
+<label class="flex-1">
+<input type="radio" name="confirmMode" value="scan"  hidden>
+
+<div class="modeBtn" data-mode="scan">📷 สแกน</div>
+</label>
+
+<label class="flex-1">
+<input type="radio" name="confirmMode" value="manual" hidden>
+
+<div class="modeBtn" data-mode="manual">⌨️ กรอกเอง</div>
+</label>
+
+</div>
+  <div id="manualConfirmBox" style="margin-top:8px;display:none">
+
+  กรอก Tracking ซ้ำ:
+
+  <input id="pendingConfirmTracking"
+    style="width:100%;padding:8px;border-radius:6px;border:1px solid #ddd"
+    placeholder="พิมพ์ Tracking เดิมอีกครั้ง" />
+
+</div>
 
   <div class="small" style="margin-top:8px">
     วิธีการยืนยัน:
@@ -282,10 +501,6 @@ fontFamily:{display:["Noto Sans Thai Looped","sans-serif"]}
       ยืนยันรับพัสดุ
     </button>
 
-    <button class="flex-1 border rounded-lg py-2"
-      onclick="startCameraConfirm()">
-      📷 สแกนเพื่อยืนยัน
-    </button>
 
     <button class="flex-1 border rounded-lg py-2 text-red-500"
       onclick="forceClearPending()">
@@ -314,7 +529,46 @@ fontFamily:{display:["Noto Sans Thai Looped","sans-serif"]}
         await doConfirmPickup(pendingVerification.tracking, recipientToSend);
       });
 
-      if (recipientField) recipientField.focus();
+      let currentMode = null
+
+      document.querySelectorAll(".modeBtn").forEach(btn => {
+
+        btn.onclick = () => {
+
+          const mode = btn.innerText.includes("กรอก") ? "manual" : "scan"
+
+          // ===== กดซ้ำ = ปิด =====
+          if (currentMode === mode) {
+
+            btn.classList.remove("activeMode")
+            currentMode = null
+
+            document.getElementById("manualConfirmBox").style.display = "none"
+
+            stopConfirmCamera()
+
+            return
+          }
+
+          // ===== เลือกใหม่ =====
+          document.querySelectorAll(".modeBtn")
+            .forEach(b => b.classList.remove("activeMode"))
+
+          btn.classList.add("activeMode")
+          currentMode = mode
+
+          if (mode === "manual") {
+            document.getElementById("manualConfirmBox").style.display = "block"
+            stopConfirmCamera()
+            document.getElementById("pendingConfirmTracking")?.focus()
+          }
+
+          if (mode === "scan") {
+            document.getElementById("manualConfirmBox").style.display = "none"
+            startCameraConfirm()
+          }
+        }
+      })
     }
 
     /* ---------- Confirm pickup (send recipient_name with request) ---------- */
@@ -328,15 +582,22 @@ fontFamily:{display:["Noto Sans Thai Looped","sans-serif"]}
         });
         const j = await safeJson(res);
         if (res.ok && (j.ok === true || j.ok === undefined)) {
-          setStatus(`Confirmed pickup ${tracking}`);
-          showDetail({ tracking: tracking, queue: pendingVerification ? pendingVerification.queue : '', recipient: recipientToSend, status: 'ได้รับแล้ว' });
-          pendingVerification = null;
-          closePendingPopup();
-          document.getElementById('verifyBox').innerHTML = '';
 
-          // optionally refresh recent list
-          refreshRecentIfExists();
-        } else {
+showSuccessPopup(
+  tracking,
+  pendingVerification ? pendingVerification.queue : "",
+  recipientToSend
+)
+
+setStatus("รับพัสดุเรียบร้อยแล้ว")
+
+pendingVerification = null
+closePendingPopup()
+document.getElementById('verifyBox').innerHTML = ''
+
+refreshRecentIfExists()
+
+} else {
           setStatus('Confirm failed: ' + (j.message || j.detail || JSON.stringify(j)));
         }
       } catch (err) {
@@ -601,158 +862,349 @@ fontFamily:{display:["Noto Sans Thai Looped","sans-serif"]}
     /* initialize report values on load */
     window.addEventListener('load', () => { if (document.querySelector('.tabBtn.active').dataset.tab === 'reports') initReports(); });
 
-    /* ---------- Camera Scan (ADD-ON) ---------- */
-    let qrScanner = null;
-    let cameraLocked = false;
+
 
     function startCamera() {
-      if (qrScanner) return;
 
-      cameraLocked = false;
-      qrScanner = new Html5Qrcode("reader");
+      if (mainScanner) return
+      document.getElementById("cameraOverlay").classList.remove("hidden")
+      cameraLocked = false
+      mainScanner = new Html5Qrcode("reader")
 
       Html5Qrcode.getCameras().then(cams => {
-        if (!cams.length) {
-          setStatus('No camera found');
-          return;
-        }
 
-        const camId = cams[cams.length - 1].id; // back camera
+        if (!cams.length) return alert("ไม่พบกล้อง")
 
-        qrScanner.start(
+        const camId = cams[cams.length - 1].id
+
+        mainScanner.start(
           camId,
-          { fps: 10, qrbox: 250 },
-          text => {
-            if (cameraLocked) return;
-            cameraLocked = true;
+          { fps: 10, qrbox: 220 },
+          txt => {
+            if (cameraLocked) return
+            cameraLocked = true
 
-            stopCamera();
-
-            // ⭐ จุดสำคัญ: ใช้ logic เดิมทั้งหมด
-            handleScan(text.trim());
+            handleScan(txt.trim())
+            setTimeout(stopCamera, 400)
           }
-        );
-      }).catch(err => {
-        setStatus('Camera error');
-        console.error(err);
-      });
+        )
+      }).catch(e => alert(e))
     }
+
 
     function stopCamera() {
-      if (!qrScanner) return;
-      qrScanner.stop().then(() => {
-        qrScanner.clear();
-        qrScanner = null;
-        cameraLocked = false;
-      });
+      if (!mainScanner) return
+
+      mainScanner.stop().then(() => {
+        mainScanner.clear()
+        mainScanner = null
+        cameraLocked = false
+
+        document.getElementById("cameraOverlay").classList.add("hidden")
+      })
     }
 
-    function startCameraConfirm() {
-      if (qrScanner) return;
 
-      cameraLocked = false;
-      setStatus('Scanning for confirm...');
 
-      qrScanner = new Html5Qrcode("reader");
 
-      Html5Qrcode.getCameras().then(cams => {
-        if (!cams.length) {
-          setStatus('No camera found');
-          return;
-        }
+    async function startCameraConfirm() {
 
-        const camId = cams[cams.length - 1].id;
+      if (confirmScanner || confirmStopping) return
 
-        qrScanner.start(
-          camId,
-          { fps: 10, qrbox: 250 },
-          text => {
-            if (cameraLocked) return;
-            cameraLocked = true;
+      const recipientInput = document.getElementById('pendingRecipientInput')
 
-            stopCamera();
+      if (!recipientInput || !recipientInput.value.trim()) {
+        openRecipientPopup()
+        return
+      }
+      document.getElementById("confirmCameraOverlay").classList.remove("hidden")
 
-            const scanned = text.trim();
+      cameraLocked = false
+      setStatus('Scanning for confirm...')
 
-            // ⭐ สำคัญ: ใช้ logic confirm เดิม
-            if (pendingVerification && scanned === pendingVerification.tracking) {
-              const recipientInput = document.getElementById('pendingRecipientInput');
-              const recipientToSend = recipientInput ? recipientInput.value.trim() : '';
-              doConfirmPickup(scanned, recipientToSend);
-            } else {
-              setStatus(`Mismatch: scanned ${scanned}`);
-            }
+      confirmScanner = new Html5Qrcode("confirmReader")
+
+      const cams = await Html5Qrcode.getCameras()
+
+      if (!cams.length) {
+        alert("ไม่พบกล้อง")
+        confirmScanner = null
+        return
+      }
+
+      const camId = cams[cams.length - 1].id
+
+      await confirmScanner.start(
+        camId,
+        { fps: 10, qrbox: 250 },
+        async txt => {
+
+          if (cameraLocked) return
+          cameraLocked = true
+
+          const scanned = txt.trim()
+
+          if (pendingVerification && scanned === pendingVerification.tracking) {
+
+            const recipientToSend = recipientInput.value.trim()
+            doConfirmPickup(scanned, recipientToSend)
+
+          } else {
+            openMismatchPopup()
           }
-        );
-      });
+
+          await stopConfirmCamera()
+        }
+      )
+    }
+    async function stopConfirmCamera() {
+
+      if (!confirmScanner) return
+
+      confirmStopping = true
+
+      try {
+        await confirmScanner.stop()
+        confirmScanner.clear()
+      } catch { }
+
+      confirmScanner = null
+      cameraLocked = false
+      confirmStopping = false
+
+      document.getElementById("confirmCameraOverlay").classList.add("hidden")
     }
 
 
 
-/* popup helpers */
-function showPopup(q,t){
-popupQueue.innerText=q||"-"
-popupTracking.innerText=t||""
-queuePopup.classList.remove("hidden")
-queuePopup.classList.add("flex")
+    /* popup helpers */
+    function showPopup(q, t) {
+      popupQueue.innerText = q || "-"
+      popupTracking.innerText = t || ""
+      queuePopup.classList.remove("hidden")
+      queuePopup.classList.add("flex")
+    }
+    function closePopup() {
+      queuePopup.classList.add("hidden")
+      queuePopup.classList.remove("flex")
+    }
+
+    function openPendingPopup() {
+      pendingPopup.classList.remove("hidden")
+      pendingPopup.classList.add("flex")
+
+      document.querySelectorAll(".modeBtn")
+        .forEach(b => b.classList.remove("activeMode"))
+
+      document.getElementById("manualConfirmBox").style.display = "none"
+    }
+
+    function closePendingPopup() {
+
+      if (confirmScanner) {
+        stopConfirmCamera()
+      }
+
+      pendingPopup.classList.add("hidden")
+      pendingPopup.classList.remove("flex")
+    }
+
+
+    function openAlreadyPopup() {
+      alreadyPopup.classList.remove("hidden")
+      alreadyPopup.classList.add("flex")
+    }
+
+    function closeAlreadyPopup() {
+      alreadyPopup.classList.add("hidden")
+      alreadyPopup.classList.remove("flex")
+    }
+    function openRecipientPopup() {
+      recipientPopup.classList.remove("hidden")
+      recipientPopup.classList.add("flex")
+    }
+
+    function closeRecipientPopup() {
+      recipientPopup.classList.add("hidden")
+      recipientPopup.classList.remove("flex")
+
+      const r = document.getElementById("pendingRecipientInput")
+      r?.focus()
+    }
+    function openMismatchPopup() {
+      mismatchPopup.classList.remove("hidden")
+      mismatchPopup.classList.add("flex")
+    }
+
+    function closeMismatchPopup() {
+      mismatchPopup.classList.add("hidden")
+      mismatchPopup.classList.remove("flex")
+
+      cameraLocked = false
+    }
+    function openNotFoundPopup() {
+      notFoundPopup.classList.remove("hidden")
+      notFoundPopup.classList.add("flex")
+    }
+
+    function closeNotFoundPopup() {
+      notFoundPopup.classList.add("hidden")
+      notFoundPopup.classList.remove("flex")
+    }
+
+function showSuccessPopup(tracking, queue, recipient){
+  const box = document.getElementById("successPopup")
+  const info = document.getElementById("successInfo")
+
+  info.innerHTML = `
+ ${escapeHtml(tracking)}<br>
+เลขคิว: ${escapeHtml(queue || "-")}<br>
+ผู้รับ: ${escapeHtml(recipient || "-")}
+`
+
+  box.classList.remove("hidden")
+  box.classList.add("flex")
 }
-function closePopup(){
-queuePopup.classList.add("hidden")
-queuePopup.classList.remove("flex")
+
+function closeSuccessPopup(){
+  const box = document.getElementById("successPopup")
+
+  box.classList.add("hidden")
+  box.classList.remove("flex")
+
+  loadWaitingParcels()
+  scanInput.focus()
 }
+function applyDateFilter() {
+  const q = document.getElementById("dateFilter").value
 
-function openPendingPopup(){
-  pendingPopup.classList.remove("hidden")
-  pendingPopup.classList.add("flex")
-}
-
-function closePendingPopup(){
-  pendingPopup.classList.add("hidden")
-  pendingPopup.classList.remove("flex")
-}
-
-function openAlreadyPopup(){
-  alreadyPopup.classList.remove("hidden")
-  alreadyPopup.classList.add("flex")
-}
-
-function closeAlreadyPopup(){
-  alreadyPopup.classList.add("hidden")
-  alreadyPopup.classList.remove("flex")
-}
-
-
-
-function logout(){location.href="/login_admin"}
-
-async function loadWaitingParcels() {
-  const status = document.getElementById("statusFilter").value
-
-  let url = "/api/parcels"
-
-  if (status && status !== "ทั้งหมด") {
-    url += `?status=${encodeURIComponent(status)}`
+  // ถ้าเป็นตัวเลข → search queue
+  if (q && /^\d+$/.test(q)) {
+    searchQueue(q)
+    return
   }
 
-  const res = await fetch(url)
-  const data = await res.json()
+  // ถ้าไม่ใช่ตัวเลข → date filter
+  loadWaitingParcels()
+}
 
-  const box = document.getElementById("parcelList")
+function clearDateFilter(){
+  document.getElementById("dateFilter").value = ""
+  loadWaitingParcels("today")
+}
 
-  box.innerHTML = data.map(p => `
-  <div onclick="handleScan('${p.tracking_number}')"
-       class="bg-white rounded-lg p-3 mb-2 border cursor-pointer hover:bg-orange-50">
+function searchQueue(val) {
+  if (!val) {
+    loadWaitingParcels()
+    return
+  }
 
-    <b>${p.queue_number}</b> — ${p.tracking_number}
-    <div class="text-xs text-gray-500">${p.status}</div>
+  fetch(`/api/parcels/search?q=${encodeURIComponent(val)}`)
+    .then(r => r.json())
+    .then(data => {
+
+      const box = document.getElementById("parcelList")
+
+      if (!data.items || !data.items.length) {
+        box.innerHTML = `<div class="text-sm text-gray-400">ไม่พบพัสดุ</div>`
+        return
+      }
+
+      box.innerHTML = data.items.map(p => `
+<div onclick="handleScan('${p.tracking}')"
+     class="flex justify-between items-center p-4 bg-white rounded-xl mb-2 border cursor-pointer hover:bg-orange-50">
+
+  <div class="flex gap-4">
+
+    <div class="size-10 rounded-full border flex items-center justify-center font-bold">
+      ${p.queue ?? "-"}
+    </div>
+
+    <div>
+      <p class="font-bold">${p.tracking}</p>
+
+      <span class="text-xs bg-orange-100 px-2 rounded">
+        ${p.status}
+      </span>
+
+      ${p.created_at ? `
+      <div class="mt-1">
+        <span class="text-xs bg-green-100 text-green-700 px-2 rounded">
+          ${new Date(p.created_at).toLocaleString("th-TH",{timeZone:"Asia/Bangkok"})}
+        </span>
+      </div>` : ``}
+
+    </div>
 
   </div>
+</div>
+`).join("")
+    })
+}
+
+    function logout() { location.href = "/login_admin" }
+
+    async function loadWaitingParcels(date=null){
+      try {
+        const status = document.getElementById("statusFilter").value || "ทั้งหมด"
+
+        let url = `/api/parcels?status=${encodeURIComponent(status)}`
+
+if(date){
+  url += `&date=${encodeURIComponent(date)}`
+}
+        const res = await fetch(url)
+
+        if (!res.ok) throw new Error("โหลดรายการไม่สำเร็จ")
+
+        const data = await res.json()
+        const box = document.getElementById("parcelList")
+
+        if (!data.length) {
+          box.innerHTML = `<div class="text-sm text-gray-400">ไม่พบพัสดุ</div>`
+          return
+        }
+
+        box.innerHTML = data.map(p => `
+<div onclick="handleScan('${p.tracking_number}')"
+     class="flex justify-between items-center p-4 bg-white rounded-xl mb-2 border cursor-pointer hover:bg-orange-50">
+
+  <div class="flex gap-4">
+
+    <!-- queue circle -->
+    <div class="size-10 rounded-full border flex items-center justify-center font-bold">
+      ${p.queue_number ?? "-"}
+    </div>
+
+    <div>
+      <p class="font-bold">${p.tracking_number}</p>
+
+      <div class="flex items-center gap-2 mt-1">
+        <span class="text-xs bg-orange-100 px-2 rounded">
+          ${p.status}
+        </span>
+      </div>
+      <div>
+      ${p.created_at ? `
+<span class="text-xs bg-green-100 text-green-700 px-2 rounded">
+${new Date(p.created_at).toLocaleString("th-TH", { timeZone: "Asia/Bangkok" })}
+</span>` : ``}
+    </div>
+
+  </div>
+</div>
+</div>
 `).join("")
 
-}
-window.addEventListener("load", loadWaitingParcels)
+      } catch (e) {
+        document.getElementById("parcelList").innerHTML =
+          `<div class="text-red-400 text-sm">โหลดข้อมูลไม่ได้</div>`
+        console.error(e)
+      }
+    }
 
-</script>
+  </script>
 
 </body>
+
 </html>
