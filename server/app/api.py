@@ -41,7 +41,7 @@ app.add_middleware(
     SessionMiddleware,
     secret_key=SESSION_SECRET_KEY,
     same_site="none",
-    https_only=False
+    https_only=True
 )
 
 
@@ -103,27 +103,16 @@ def login_admin_alias(request: Request):
 
 @app.get("/admin/logout")
 def admin_logout(request: Request):
-    admin = request.session.get("admin") or {}
-    admin_name = admin.get("name", "unknown")
 
-    db = SessionLocal()
-    try:
-        al = AuditLog(
-            entity="admin",
-            entity_id=None,
-            action="logout",
-            user=admin_name,
-            details="admin logout"
-        )
-        db.add(al)
-        db.commit()
-    except Exception:
-        db.rollback()
-    finally:
-        db.close()
+    request.session.clear()   # 👈 สำคัญสุด
 
-    request.session.clear()
-    return RedirectResponse(url="/admin/login", status_code=302)
+    response = RedirectResponse("/login_admin", status_code=302)
+
+    # กัน cache
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+
+    return response
 
 from pydantic import BaseModel
 
@@ -133,22 +122,16 @@ class AdminLoginIn(BaseModel):
 
 
 @app.post("/admin/login")
-async def admin_login(
-    payload: AdminLoginIn,
-    request: Request
-):
+def admin_login(payload: AdminLoginIn, request: Request):
 
     if not verify_admin_password(payload.password):
-        raise HTTPException(status_code=401, detail="wrong password")
+        raise HTTPException(status_code=401, detail="รหัสผ่านไม่ถูกต้อง")
 
     request.session["admin"] = {
         "name": payload.name
     }
 
-    return {
-        "ok": True,
-        "name": payload.name
-    }
+    return {"ok": True, "name": payload.name}
 
 
 @app.get("/admin")

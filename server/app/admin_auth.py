@@ -16,9 +16,13 @@ def verify_admin_password(password: str) -> bool:
 
 
 def require_admin(request: Request):
+
     admin = request.session.get("admin")
 
     if not admin:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+        raise HTTPException(
+            status_code=302,
+            headers={"Location": "/login_admin"}
+        )
 
     return admin

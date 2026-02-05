@@ -174,51 +174,43 @@
 
         async function login() {
 
-            const staff = document.getElementById("staffInput").value.trim()
+    const staff = document.getElementById("staffInput").value.trim()
 
-            if (!staff) {
-                showAlert("กรุณากรอกชื่อพนักงาน")
-                return
-            }
+    if (!staff) {
+        showAlert("กรุณากรอกชื่อพนักงาน")
+        return
+    }
 
-            if (!selectedCarrierId) {
-                showAlert("กรุณาเลือกบริษัทขนส่ง")
-                return
-            }
+    if (!selectedCarrierId) {
+        showAlert("กรุณาเลือกบริษัทขนส่ง")
+        return
+    }
 
+    const res = await fetch("/api/login_client", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",   // ⭐ สำคัญ
+        body: JSON.stringify({
+            carrier_id: selectedCarrierId,
+            carrier_staff_name: staff
+        })
+    })
 
-            await fetch("/api/login_client", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    carrier_id: selectedCarrierId,
-                    carrier_staff_name: staff
-                })
-            })
-            if (!res.ok) {
-
-        if (res.status === 401) {
-            showAlert("รหัสผ่านไม่ถูกต้อง")
-            return
-        }
-
+    if (!res.ok) {
         showAlert("เข้าสู่ระบบไม่สำเร็จ")
         return
     }
 
-    /* ===== login ผ่าน ===== */
-
+    // save label
     localStorage.setItem("staff_name", staff)
+    localStorage.setItem(
+        "carrier_name",
+        document.getElementById("selectedCarrier").innerText
+    )
 
-
-            const carrierText =
-                document.getElementById("selectedCarrier").innerText
-
-            localStorage.setItem("carrier_name", carrierText)
-
-
-            location.href = "/client"
-        }
+    // ✅ login สำเร็จ ค่อยเข้า client
+    location.href = "/client"
+}
 
 
         loadCarriers()

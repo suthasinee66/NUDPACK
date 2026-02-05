@@ -63,14 +63,21 @@
         <img src="/static/NUDPACK_LOGO2.png" class="w-14" />
         <div>
   <h2 class="font-bold">NUDPACK ADMIN</h2>
-  <p class="text-xs text-orange-400">Parcel Checkout</p>
+  <p class="text-xs text-orange-400"></p>
 
   <!-- admin name -->
-  <span id="adminName" class="font-semi"></span>
+  <span id="adminName" class="text-xs text-orange-400"></span>
 </div>
       </div>
 
-      <button onclick="logout()" class="text-xs text-red-500">ออกจากระบบ</button>
+      <button onclick="logout()" class="flex items-center gap-1 px-3 py-1.5 rounded-lg
+bg-red-50 text-red-600 text-xs font-semibold
+hover:bg-red-100 active:scale-95 transition">
+
+                    <span class="material-symbols-outlined text-sm">
+                        logout
+                    </span>
+                </button>
     </div>
   </header>
 
@@ -342,23 +349,7 @@
 </div>
   <script>
 
-    function adminFetch(url, opts = {}) {
-  return fetch(url, {
-    credentials: "include",
-    ...opts,
-    headers: {
-      ...(opts.headers || {}),
-      "X-Admin-Name": localStorage.getItem("admin_staff_name")
-    }
-  }).then(res => {
-    if (res.status === 401) {
-      localStorage.removeItem("admin_staff_name")
-      location.href = "/login_admin"
-      throw new Error("Unauthorized")
-    }
-    return res
-  })
-}
+    
     /* ---------------- Tabs ---------------- */
     document.querySelectorAll('.tabBtn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -392,7 +383,7 @@
       if (!pendingVerification) {
         setStatus('verifying...');
         try {
-          const res = await adminFetch(`/api/parcels/${encodeURIComponent(value)}/verify`, {credentials: "include",method: 'POST' });
+          const res = await fetch(`/api/parcels/${encodeURIComponent(value)}/verify`, {credentials: "include",method: 'POST' });
           if (!res.ok) {
 
             // ===== ไม่พบพัสดุ =====
@@ -595,7 +586,7 @@
     async function doConfirmPickup(tracking, recipientToSend) {
       setStatus('confirming pickup...');
       try {
-        const res = await adminFetch(`/api/parcels/${encodeURIComponent(tracking)}/confirm_pickup`, {credentials: "include",
+        const res = await fetch(`/api/parcels/${encodeURIComponent(tracking)}/confirm_pickup`, {credentials: "include",
           method: 'POST',
           headers: { 'Content-Type': 'application/json'},
           body: JSON.stringify({ recipient_name: recipientToSend, scanner_id: 'admin_ui' })
@@ -640,7 +631,7 @@ refreshRecentIfExists()
     async function doSearch() {
       const q = document.getElementById('searchInput').value.trim();
       if (!q) return alert('Please input tracking or queue');
-      const res = await adminFetch(`/api/parcels/search?q=${encodeURIComponent(q)}`);
+      const res = await fetch(`/api/parcels/search?q=${encodeURIComponent(q)}`);
 
       if (!res.ok) return alert('Search failed');
       const data = await res.json();
@@ -658,7 +649,7 @@ refreshRecentIfExists()
     async function verifyFromSearch(tracking) {
       setStatus('verifying...');
       try {
-        const res = await adminFetch(`/api/parcels/${encodeURIComponent(tracking)}/verify`, { credentials: "include",method:"POST"});
+        const res = await fetch(`/api/parcels/${encodeURIComponent(tracking)}/verify`, { credentials: "include",method:"POST"});
         if (!res.ok) { setStatus('verify failed'); return; }
         const info = await res.json();
         pendingVerification = {
@@ -714,7 +705,7 @@ refreshRecentIfExists()
     /* ---------- period values ---------- */
     async function loadReportValues() {
       const p = document.getElementById('r_period').value;
-      const res = await adminFetch(`/api/reports/dates?period=${p}`);
+      const res = await fetch(`/api/reports/dates?period=${p}`);
       if (!res.ok) return;
 
       const arr = await res.json();
@@ -742,7 +733,7 @@ refreshRecentIfExists()
       const p = document.getElementById('r_period').value;
       const val = document.getElementById('r_periodValues').value || '';
 
-      const sres = await adminFetch(`/api/reports/summary?period=${encodeURIComponent(p)}&date=${encodeURIComponent(val)}`);
+      const sres = await fetch(`/api/reports/summary?period=${encodeURIComponent(p)}&date=${encodeURIComponent(val)}`);
       const sdata = await sres.json();
 
       document.getElementById('summary').innerHTML = `
@@ -756,7 +747,7 @@ refreshRecentIfExists()
       currentReportData = sdata.items || [];
       renderReportTable(currentReportData);
 
-      const tres = await adminFetch(`/api/reports/timeseries?period=${encodeURIComponent(p)}&start=${encodeURIComponent(val)}`);
+      const tres = await fetch(`/api/reports/timeseries?period=${encodeURIComponent(p)}&start=${encodeURIComponent(val)}`);
       const tdata = await tres.json();
       renderChart(tdata.labels, tdata.checkin, tdata.checkout, p);
     }
@@ -821,7 +812,7 @@ refreshRecentIfExists()
 
       if (!confirm(`Delete ${selectedToDelete.size} parcel(s)?`)) return;
 
-      const res = await adminFetch('/api/parcels/bulk_delete', {
+      const res = await fetch('/api/parcels/bulk_delete', {
         credentials: "include",
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1107,7 +1098,7 @@ function applyDateFilter() {
   if (queue) url += `q=${encodeURIComponent(queue)}&`;
   if (date) url += `date=${date}`;
 
-  adminFetch(url)
+  fetch(url)
     .then(r => r.json())
     .then(j => {
       renderParcelList(j.items);
@@ -1121,12 +1112,13 @@ function clearDateFilter(){
 
 
 
-     function logout(){
-    if(confirm("ต้องการออกจากระบบหรือไม่?")){
-      localStorage.removeItem("admin_staff_name")
-      window.location.href = "/admin/logout";
-    }
-  }
+    function logout() {
+  fetch("/admin/logout", {
+    credentials: "include"
+  }).then(() => {
+    location.replace("/login_admin")   // 👈 replace ไม่ให้กดย้อน
+  })
+}
 
     async function loadWaitingParcels(date=null){
       try {
@@ -1137,7 +1129,7 @@ function clearDateFilter(){
 if(date){
   url += `&date=${encodeURIComponent(date)}`
 }
-        const res = await adminFetch(url)
+        const res = await fetch(url, {credentials: "include"})
 
         if (!res.ok) throw new Error("โหลดรายการไม่สำเร็จ")
 
