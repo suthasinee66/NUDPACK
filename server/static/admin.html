@@ -119,7 +119,6 @@
     <input
       id="queueSearch"
       placeholder="ค้นหาเลขคิว"
-      oninput="searchQueue(this.value)"
       class="border px-4 py-2 rounded-xl text-sm w-40 shadow-sm
              focus:ring-2 focus:ring-orange-400 focus:outline-none"
     >
@@ -339,6 +338,23 @@
   </div>
 </div>
   <script>
+
+    function adminFetch(url, opts = {}) {
+  return fetch(url, {
+    ...opts,
+    headers: {
+      ...(opts.headers || {}),
+      "X-Admin-Name": localStorage.getItem("admin_staff_name")
+    }
+  }).then(res => {
+    if (res.status === 401) {
+      localStorage.removeItem("admin_staff_name")
+      location.href = "/login_admin"
+      throw new Error("Unauthorized")
+    }
+    return res
+  })
+}
     /* ---------------- Tabs ---------------- */
     document.querySelectorAll('.tabBtn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -372,7 +388,7 @@
       if (!pendingVerification) {
         setStatus('verifying...');
         try {
-          const res = await fetch(`/api/parcels/${encodeURIComponent(value)}/verify`, { method: 'POST' });
+          const res = await adminFetch(`/api/parcels/${encodeURIComponent(value)}/verify`, {method: 'POST' });
           if (!res.ok) {
 
             // ===== ไม่พบพัสดุ =====
@@ -575,9 +591,9 @@
     async function doConfirmPickup(tracking, recipientToSend) {
       setStatus('confirming pickup...');
       try {
-        const res = await fetch(`/api/parcels/${encodeURIComponent(tracking)}/confirm_pickup`, {
+        const res = await adminFetch(`/api/parcels/${encodeURIComponent(tracking)}/confirm_pickup`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json'},
           body: JSON.stringify({ recipient_name: recipientToSend, scanner_id: 'admin_ui' })
         });
         const j = await safeJson(res);
@@ -620,7 +636,8 @@ refreshRecentIfExists()
     async function doSearch() {
       const q = document.getElementById('searchInput').value.trim();
       if (!q) return alert('Please input tracking or queue');
-      const res = await fetch(`/api/parcels/search?q=${encodeURIComponent(q)}`);
+      const res = await adminFetch(`/api/parcels/search?q=${encodeURIComponent(q)}`);
+
       if (!res.ok) return alert('Search failed');
       const data = await res.json();
       if (data.count === 0) { document.getElementById('searchResults').innerHTML = '<div class="muted">No results</div>'; return; }
@@ -637,7 +654,7 @@ refreshRecentIfExists()
     async function verifyFromSearch(tracking) {
       setStatus('verifying...');
       try {
-        const res = await fetch(`/api/parcels/${encodeURIComponent(tracking)}/verify`, { method: 'POST' });
+        const res = await adminFetch(`/api/parcels/${encodeURIComponent(tracking)}/verify`, { method:"POST"});
         if (!res.ok) { setStatus('verify failed'); return; }
         const info = await res.json();
         pendingVerification = {
@@ -693,7 +710,7 @@ refreshRecentIfExists()
     /* ---------- period values ---------- */
     async function loadReportValues() {
       const p = document.getElementById('r_period').value;
-      const res = await fetch(`/api/reports/dates?period=${p}`);
+      const res = await adminFetch(`/api/reports/dates?period=${p}`);
       if (!res.ok) return;
 
       const arr = await res.json();
@@ -721,7 +738,7 @@ refreshRecentIfExists()
       const p = document.getElementById('r_period').value;
       const val = document.getElementById('r_periodValues').value || '';
 
-      const sres = await fetch(`/api/reports/summary?period=${encodeURIComponent(p)}&date=${encodeURIComponent(val)}`);
+      const sres = await adminFetch(`/api/reports/summary?period=${encodeURIComponent(p)}&date=${encodeURIComponent(val)}`);
       const sdata = await sres.json();
 
       document.getElementById('summary').innerHTML = `
@@ -735,7 +752,7 @@ refreshRecentIfExists()
       currentReportData = sdata.items || [];
       renderReportTable(currentReportData);
 
-      const tres = await fetch(`/api/reports/timeseries?period=${encodeURIComponent(p)}&start=${encodeURIComponent(val)}`);
+      const tres = await adminFetch(`/api/reports/timeseries?period=${encodeURIComponent(p)}&start=${encodeURIComponent(val)}`);
       const tdata = await tres.json();
       renderChart(tdata.labels, tdata.checkin, tdata.checkout, p);
     }
@@ -800,7 +817,7 @@ refreshRecentIfExists()
 
       if (!confirm(`Delete ${selectedToDelete.size} parcel(s)?`)) return;
 
-      const res = await fetch('/api/parcels/bulk_delete', {
+      const res = await adminFetch('/api/parcels/bulk_delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ trackings: Array.from(selectedToDelete) })
@@ -1076,16 +1093,20 @@ function closeSuccessPopup(){
   scanInput.focus()
 }
 function applyDateFilter() {
-  const q = document.getElementById("dateFilter").value
 
-  // ถ้าเป็นตัวเลข → search queue
-  if (q && /^\d+$/.test(q)) {
-    searchQueue(q)
-    return
-  }
+  const queue = document.getElementById("queueSearch")?.value.trim() || "";
+  const date = document.getElementById("dateFilter")?.value || "";
 
-  // ถ้าไม่ใช่ตัวเลข → date filter
-  loadWaitingParcels()
+  let url = `/api/parcels/search?`;
+
+  if (queue) url += `q=${encodeURIComponent(queue)}&`;
+  if (date) url += `date=${date}`;
+
+  adminFetch(url)
+    .then(r => r.json())
+    .then(j => {
+      renderParcelList(j.items);
+    });
 }
 
 function clearDateFilter(){
@@ -1093,56 +1114,13 @@ function clearDateFilter(){
   loadWaitingParcels("today")
 }
 
-function searchQueue(val) {
-  if (!val) {
-    loadWaitingParcels()
-    return
+
+
+     function logout(){
+    if(confirm("ต้องการออกจากระบบหรือไม่?")){
+      window.location.href = "/admin/logout";
+    }
   }
-
-  fetch(`/api/parcels/search?q=${encodeURIComponent(val)}`)
-    .then(r => r.json())
-    .then(data => {
-
-      const box = document.getElementById("parcelList")
-
-      if (!data.items || !data.items.length) {
-        box.innerHTML = `<div class="text-sm text-gray-400">ไม่พบพัสดุ</div>`
-        return
-      }
-
-      box.innerHTML = data.items.map(p => `
-<div onclick="handleScan('${p.tracking}')"
-     class="flex justify-between items-center p-4 bg-white rounded-xl mb-2 border cursor-pointer hover:bg-orange-50">
-
-  <div class="flex gap-4">
-
-    <div class="size-10 rounded-full border flex items-center justify-center font-bold">
-      ${p.queue ?? "-"}
-    </div>
-
-    <div>
-      <p class="font-bold">${p.tracking}</p>
-
-      <span class="text-xs bg-orange-100 px-2 rounded">
-        ${p.status}
-      </span>
-
-      ${p.created_at ? `
-      <div class="mt-1">
-        <span class="text-xs bg-green-100 text-green-700 px-2 rounded">
-          ${new Date(p.created_at).toLocaleString("th-TH",{timeZone:"Asia/Bangkok"})}
-        </span>
-      </div>` : ``}
-
-    </div>
-
-  </div>
-</div>
-`).join("")
-    })
-}
-
-    function logout() { location.href = "/login_admin" }
 
     async function loadWaitingParcels(date=null){
       try {
@@ -1153,7 +1131,7 @@ function searchQueue(val) {
 if(date){
   url += `&date=${encodeURIComponent(date)}`
 }
-        const res = await fetch(url)
+        const res = await adminFetch(url)
 
         if (!res.ok) throw new Error("โหลดรายการไม่สำเร็จ")
 
@@ -1202,6 +1180,46 @@ ${new Date(p.created_at).toLocaleString("th-TH", { timeZone: "Asia/Bangkok" })}
         console.error(e)
       }
     }
+    function renderParcelList(items){
+
+  const box = document.getElementById("parcelList")
+
+  if(!items || !items.length){
+    box.innerHTML = `<div class="text-sm text-gray-400">ไม่พบพัสดุ</div>`
+    return
+  }
+
+  box.innerHTML = items.map(p => `
+<div onclick="handleScan('${p.tracking_number || p.tracking}')"
+ class="flex justify-between items-center p-4 bg-white rounded-xl mb-2 border cursor-pointer hover:bg-orange-50">
+
+<div class="flex gap-4">
+
+<div class="size-10 rounded-full border flex items-center justify-center font-bold">
+${p.queue_number || p.queue || "-"}
+</div>
+
+<div>
+<p class="font-bold">${p.tracking_number || p.tracking}</p>
+
+<span class="text-xs bg-orange-100 px-2 rounded">
+${p.status}
+</span>
+
+${p.created_at ? `
+<div class="mt-1">
+<span class="text-xs bg-green-100 text-green-700 px-2 rounded">
+${new Date(p.created_at).toLocaleString("th-TH",{timeZone:"Asia/Bangkok"})}
+</span>
+</div>` : ``}
+
+</div>
+</div>
+</div>
+`).join("")
+}
+
+    
 
   </script>
 

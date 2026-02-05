@@ -1,7 +1,7 @@
 # server/app/api.py
 from typing import Optional
-from fastapi import FastAPI, HTTPException, Query, Response, Request
-from fastapi.responses import RedirectResponse
+from fastapi import FastAPI, HTTPException, Query, Response, Request, Header, Depends,Form
+from fastapi.responses import RedirectResponse,FileResponse, JSONResponse
 from pydantic import BaseModel
 from .db import SessionLocal, init_db
 from .models import Parcel, DailyCounter, AuditLog, RecycledQueue,CarrierList
@@ -12,6 +12,8 @@ import io, csv
 from starlette.middleware.sessions import SessionMiddleware
 from .models import thai_now
 from datetime import datetime, timedelta
+from pathlib import Path
+from .admin_auth import require_admin, verify_admin_password
 
 try:
     import pandas as pd
@@ -23,11 +25,22 @@ import os
 from pathlib import Path
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from fastapi import Request, Form
+from fastapi.responses import RedirectResponse
+from starlette.middleware.sessions import SessionMiddleware
+
 
 app = FastAPI(title="ParcelServer API")
-from fastapi.staticfiles import StaticFiles
 
-app.mount("/static", StaticFiles(directory="client/static"), name="static")
+
+from fastapi.middleware.cors import CORSMiddleware
+BASE_DIR = Path(__file__).resolve().parent
+SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", "parcel-session-secret")
+
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=SESSION_SECRET_KEY
+)
 
 
 from fastapi.middleware.cors import CORSMiddleware
@@ -43,19 +56,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ✅ ใส่อันนี้แยกออกมา
-app.add_middleware(
-    SessionMiddleware,
-    secret_key="parcel-secret-key"
-)
-
-
-
 # --- resolve project and static directories ---
 # file is server/app/api.py -> parents[2] => project root (ParcelSystem)
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 CLIENT_STATIC = PROJECT_ROOT / "client" / "static"
 SERVER_STATIC = PROJECT_ROOT / "server" / "static"
+
 
 # Mount client static at /static (client UI)
 if CLIENT_STATIC.exists():
@@ -74,50 +80,77 @@ def client_ui(request: Request):
 
     return FileResponse(str(CLIENT_STATIC / "client.html"))
 
-
-@app.get("/admin")
-def admin_ui():
-    # Prefer server/static/admin.html, fallback to client/static/admin.html
-    server_admin = SERVER_STATIC / "admin.html"
-    if server_admin.exists():
-        return FileResponse(str(server_admin))
-    client_admin = CLIENT_STATIC / "admin.html"
-    if client_admin.exists():
-        return FileResponse(str(client_admin))
-    raise HTTPException(status_code=404, detail=f"admin.html not found (checked {server_admin} and {client_admin})")
-
-
-@app.get("/recipient")
-def recipient_ui():
-    # Serve recipient.html from server/static
-    recipient_file = SERVER_STATIC / "recipient.html"
-    if recipient_file.exists():
-        return FileResponse(str(recipient_file))
-    raise HTTPException(status_code=404, detail=f"recipient.html not found at {recipient_file}")
-
-
-@app.get("/recipient.html")
-def recipient_html():
-    # Explicit path to serve recipient.html (so URL is /recipient.html)
-    recipient_file = SERVER_STATIC / "recipient.html"
-    if recipient_file.exists():
-        return FileResponse(str(recipient_file))
-    raise HTTPException(status_code=404, detail=f"recipient.html not found at {recipient_file}")
-
-
-@app.get("/admin_static/recipient.html")
-def block_admin_static_recipient():
-    # Prevent access to recipient.html via the admin_static mount
-    raise HTTPException(status_code=404, detail="not found")
-
 @app.get("/login_client")
 def login_page():
-    return FileResponse(str(CLIENT_STATIC / "login_client.html"))\
-    
+    return FileResponse(str(CLIENT_STATIC / "login_client.html"))
+
 @app.get("/logout")
 def logout(request: Request):
     request.session.clear()
     return RedirectResponse("/login_client")
+
+@app.get("/admin/login")
+def admin_login_page():
+    return RedirectResponse("/login_admin", status_code=302)
+
+@app.get("/login_admin")
+def login_admin_alias(request: Request):
+    request.session.clear()   # 👈 ตัด session admin ทิ้งทุกครั้ง
+    return FileResponse(str(CLIENT_STATIC / "login_admin.html"))
+
+@app.get("/admin/logout")
+def admin_logout(request: Request):
+    admin_name = request.session.get("admin_name", "unknown")
+
+    db = SessionLocal()
+    try:
+        al = AuditLog(
+            entity="admin",
+            entity_id=None,
+            action="logout",
+            user=admin_name,
+            details="admin logout"
+        )
+        db.add(al)
+        db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()
+
+    request.session.clear()
+    return RedirectResponse(url="/admin/login", status_code=302)
+
+@app.post("/admin/login")
+def admin_login(
+    request: Request,
+    name: str = Form(...),
+    password: str = Form(...)
+):
+    if not verify_admin_password(password):
+        return RedirectResponse("/login_admin?error=1", status_code=303)
+
+    request.session["admin"] = {
+        "name": name
+    }
+
+    return RedirectResponse("/admin", status_code=303)
+
+
+@app.get("/admin")
+def admin_ui(
+    request: Request,
+    admin=Depends(require_admin)
+):
+    server_admin = SERVER_STATIC / "admin.html"
+    if server_admin.exists():
+        return FileResponse(str(server_admin))
+
+    client_admin = CLIENT_STATIC / "admin.html"
+    if client_admin.exists():
+        return FileResponse(str(client_admin))
+
+    raise HTTPException(status_code=404, detail="admin.html not found")
 
 
 
@@ -262,25 +295,46 @@ def confirm_pending(tracking: str):
         db.close()
 
 @app.get("/api/parcels/search")
-def search_parcels(q: str):
+def search_parcels(
+    q: str | None = None,
+    date: str | None = None
+):
     db = SessionLocal()
+
     try:
-        parcels = db.query(Parcel).filter(
-            or_(
-                Parcel.queue_number == q,
-                Parcel.tracking_number == q
+        query = db.query(Parcel)
+
+        # ---------- queue filter ----------
+        if q:
+            query = query.filter(Parcel.queue_number.ilike(f"%{q}%"))
+
+        # ---------- date filter ----------
+        if date:
+            day = datetime.strptime(date, "%Y-%m-%d")
+            start = day
+            end = day + timedelta(days=1)
+
+            query = query.filter(
+                and_(
+                    Parcel.created_at >= start,
+                    Parcel.created_at < end
+                )
             )
-        ).order_by(Parcel.created_at.desc()).all()
+
+        parcels = query.order_by(Parcel.created_at.desc()).all()
 
         return {
             "count": len(parcels),
             "items": [
                 {
-                    "tracking": p.tracking_number,
-                    "queue": p.queue_number,
+                    "tracking_number": p.tracking_number,
+                    "queue_number": p.queue_number,
                     "status": p.status,
-                    "created_at": p.created_at.isoformat() if p.created_at else None
-                } for p in parcels
+                    "recipient_name": p.recipient_name,
+                    "created_at": p.created_at.isoformat() if p.created_at else None,
+                    "picked_up_at": p.picked_up_at.isoformat() if p.picked_up_at else None,
+                }
+                for p in parcels
             ]
         }
 
@@ -346,7 +400,7 @@ def pickup_parcel(tracking: str):
 def list_parcels(
     limit: int = 500,
     status: Optional[str] = Query(None),
-    date: Optional[str] = Query(None)   # "today" | "YYYY-MM-DD" | None
+    date: Optional[str] = Query(None),   # "today" | "YYYY-MM-DD" | None
 ):
     db = SessionLocal()
     try:
@@ -724,9 +778,15 @@ def export_report(period: str = "daily", date: Optional[str] = None, fmt: str = 
 # Admin: Bulk delete parcels
 # ---------------------------
 @app.post("/api/parcels/bulk_delete")
-def bulk_delete_parcels(payload: BulkDeleteIn):
+def bulk_delete_parcels(
+    payload: BulkDeleteIn,
+    request: Request,
+    admin = Depends(require_admin)
+):
     if not payload.ids and not payload.trackings:
         raise HTTPException(status_code=400, detail="ids or trackings required")
+
+    admin_name = admin["name"] 
 
     db = SessionLocal()
     try:
@@ -746,13 +806,13 @@ def bulk_delete_parcels(payload: BulkDeleteIn):
         for p in to_delete:
             db.delete(p)
 
-            # audit log
+        
             try:
                 al = AuditLog(
                     entity="parcel",
                     entity_id=p.id,
                     action="delete",
-                    user="admin_ui",
+                    user=admin_name,
                     details=f"tracking={p.tracking_number}"
                 )
                 db.add(al)
