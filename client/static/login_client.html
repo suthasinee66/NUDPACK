@@ -77,10 +77,10 @@
                     </label>
 
                 </div>
+                <div class="text-center text-xs text-gray-400 mt-4"></div>
                 <div>
                     <label class="flex flex-col gap-2">
-                        <span class="text-[#1c150d] dark:text-white text-sm font-semibold leading-normal ml-1">Select
-                            Carrier (บริษัทขนส่ง)</span>
+                        <span class="text-[#1c150d] dark:text-white text-sm font-semibold leading-normal ml-1">บริษัทขนส่ง</span>
                         <div class="relative flex items-center">
                             <div
                                 class="absolute left-3 text-[#9e7647] flex items-center justify-center pointer-events-none">
@@ -112,13 +112,14 @@
                         </div>
                     </label>
                 </div>
+                <div class="text-center text-xs text-gray-400 mt-4"></div>
                 <div class="pt-2">
                     <button
                         class="w-full bg-primary hover:bg-primary/90 active:scale-[0.98] text-white font-bold py-4 px-6 rounded-lg shadow-md shadow-primary/20 transition-all duration-200 flex items-center justify-center gap-2"
                         type="button" onclick="login()">
                         <span>เข้าสู่ระบบ</span>
-                        <span class="material-symbols-outlined text-[20px]">login</span>
                     </button>
+                    <div class="text-center text-xs text-gray-400 mt-4"></div>
                 </div>
                 <div class="text-center">
                 </div>
@@ -194,7 +195,20 @@
                     carrier_staff_name: staff
                 })
             })
-            localStorage.setItem("staff_name", staff)
+            if (!res.ok) {
+
+        if (res.status === 401) {
+            showAlert("รหัสผ่านไม่ถูกต้อง")
+            return
+        }
+
+        showAlert("เข้าสู่ระบบไม่สำเร็จ")
+        return
+    }
+
+    /* ===== login ผ่าน ===== */
+
+    localStorage.setItem("staff_name", staff)
 
 
             const carrierText =

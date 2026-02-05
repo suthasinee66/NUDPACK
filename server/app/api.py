@@ -39,7 +39,9 @@ SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", "parcel-session-secret")
 
 app.add_middleware(
     SessionMiddleware,
-    secret_key=SESSION_SECRET_KEY
+    secret_key=SESSION_SECRET_KEY,
+    same_site="none",
+    https_only=False
 )
 
 
@@ -50,6 +52,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:8000",
         "http://127.0.0.1:8000",
+        "http://192.168.249.105:8000",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -100,7 +103,8 @@ def login_admin_alias(request: Request):
 
 @app.get("/admin/logout")
 def admin_logout(request: Request):
-    admin_name = request.session.get("admin_name", "unknown")
+    admin = request.session.get("admin") or {}
+    admin_name = admin.get("name", "unknown")
 
     db = SessionLocal()
     try:
@@ -121,27 +125,37 @@ def admin_logout(request: Request):
     request.session.clear()
     return RedirectResponse(url="/admin/login", status_code=302)
 
+from pydantic import BaseModel
+
+class AdminLoginIn(BaseModel):
+    name: str
+    password: str
+
+
 @app.post("/admin/login")
-def admin_login(
-    request: Request,
-    name: str = Form(...),
-    password: str = Form(...)
+async def admin_login(
+    payload: AdminLoginIn,
+    request: Request
 ):
-    if not verify_admin_password(password):
-        return RedirectResponse("/login_admin?error=1", status_code=303)
+
+    if not verify_admin_password(payload.password):
+        raise HTTPException(status_code=401, detail="wrong password")
 
     request.session["admin"] = {
-        "name": name
+        "name": payload.name
     }
 
-    return RedirectResponse("/admin", status_code=303)
+    return {
+        "ok": True,
+        "name": payload.name
+    }
 
 
 @app.get("/admin")
-def admin_ui(
-    request: Request,
-    admin=Depends(require_admin)
-):
+def admin_ui(request: Request):
+    if not request.session.get("admin"):
+        return RedirectResponse("/login_admin")
+
     server_admin = SERVER_STATIC / "admin.html"
     if server_admin.exists():
         return FileResponse(str(server_admin))
@@ -297,7 +311,8 @@ def confirm_pending(tracking: str):
 @app.get("/api/parcels/search")
 def search_parcels(
     q: str | None = None,
-    date: str | None = None
+    date: str | None = None,
+    admin = Depends(require_admin)
 ):
     db = SessionLocal()
 
@@ -401,6 +416,7 @@ def list_parcels(
     limit: int = 500,
     status: Optional[str] = Query(None),
     date: Optional[str] = Query(None),   # "today" | "YYYY-MM-DD" | None
+    admin = Depends(require_admin)
 ):
     db = SessionLocal()
     try:

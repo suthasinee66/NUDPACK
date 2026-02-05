@@ -1,5 +1,7 @@
 from passlib.context import CryptContext
-from fastapi import Request, HTTPException
+from fastapi import Request, HTTPException,status
+from fastapi.responses import RedirectResponse
+
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -14,6 +16,9 @@ def verify_admin_password(password: str) -> bool:
 
 
 def require_admin(request: Request):
-    if not request.session.get("admin"):
-        raise HTTPException(status_code=401)
-    return request.session.get("admin")
+    admin = request.session.get("admin")
+
+    if not admin:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    return admin

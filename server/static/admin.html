@@ -62,9 +62,12 @@
       <div class="flex gap-3 items-center">
         <img src="/static/NUDPACK_LOGO2.png" class="w-14" />
         <div>
-          <h2 class="font-bold">NUDPACK ADMIN</h2>
-          <p class="text-xs text-orange-400">Parcel Checkout</p>
-        </div>
+  <h2 class="font-bold">NUDPACK ADMIN</h2>
+  <p class="text-xs text-orange-400">Parcel Checkout</p>
+
+  <!-- admin name -->
+  <span id="adminName" class="font-semi"></span>
+</div>
       </div>
 
       <button onclick="logout()" class="text-xs text-red-500">ออกจากระบบ</button>
@@ -341,6 +344,7 @@
 
     function adminFetch(url, opts = {}) {
   return fetch(url, {
+    credentials: "include",
     ...opts,
     headers: {
       ...(opts.headers || {}),
@@ -388,7 +392,7 @@
       if (!pendingVerification) {
         setStatus('verifying...');
         try {
-          const res = await adminFetch(`/api/parcels/${encodeURIComponent(value)}/verify`, {method: 'POST' });
+          const res = await adminFetch(`/api/parcels/${encodeURIComponent(value)}/verify`, {credentials: "include",method: 'POST' });
           if (!res.ok) {
 
             // ===== ไม่พบพัสดุ =====
@@ -591,7 +595,7 @@
     async function doConfirmPickup(tracking, recipientToSend) {
       setStatus('confirming pickup...');
       try {
-        const res = await adminFetch(`/api/parcels/${encodeURIComponent(tracking)}/confirm_pickup`, {
+        const res = await adminFetch(`/api/parcels/${encodeURIComponent(tracking)}/confirm_pickup`, {credentials: "include",
           method: 'POST',
           headers: { 'Content-Type': 'application/json'},
           body: JSON.stringify({ recipient_name: recipientToSend, scanner_id: 'admin_ui' })
@@ -654,7 +658,7 @@ refreshRecentIfExists()
     async function verifyFromSearch(tracking) {
       setStatus('verifying...');
       try {
-        const res = await adminFetch(`/api/parcels/${encodeURIComponent(tracking)}/verify`, { method:"POST"});
+        const res = await adminFetch(`/api/parcels/${encodeURIComponent(tracking)}/verify`, { credentials: "include",method:"POST"});
         if (!res.ok) { setStatus('verify failed'); return; }
         const info = await res.json();
         pendingVerification = {
@@ -818,6 +822,7 @@ refreshRecentIfExists()
       if (!confirm(`Delete ${selectedToDelete.size} parcel(s)?`)) return;
 
       const res = await adminFetch('/api/parcels/bulk_delete', {
+        credentials: "include",
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ trackings: Array.from(selectedToDelete) })
@@ -1118,6 +1123,7 @@ function clearDateFilter(){
 
      function logout(){
     if(confirm("ต้องการออกจากระบบหรือไม่?")){
+      localStorage.removeItem("admin_staff_name")
       window.location.href = "/admin/logout";
     }
   }
@@ -1219,9 +1225,19 @@ ${new Date(p.created_at).toLocaleString("th-TH",{timeZone:"Asia/Bangkok"})}
 `).join("")
 }
 
-    
 
   </script>
+
+  <script>
+const adminName = localStorage.getItem("admin_staff_name")
+
+if(adminName){
+  const el = document.getElementById("adminName")
+  if(el){
+    el.textContent = adminName
+  }
+}
+</script>
 
 </body>
 

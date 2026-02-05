@@ -51,50 +51,94 @@ background-position: 0 0, 10px 10px;
 
 <div class="w-full max-w-[400px] bg-white rounded-xl shadow-xl p-8 border border-[#e9dcce]/50">
 
-<h2 class="text-center font-bold text-xl mb-2">Parcel Admin</h2>
+<h2 class="text-center font-bold text-xl mb-2">NUDPACK Admin</h2>
 <p class="text-center text-sm text-gray-500 mb-4">Administrator Login</p>
+<div class="space-y-4">
+<input id="adminName"
+placeholder="ชื่อเจ้าหน้าที่"
+class="w-full py-3 px-4 rounded-lg border bg-[#fcfaf8]">
 
-<div id="error-box"
-class="hidden text-red-600 bg-red-50 text-sm rounded-lg p-3 mb-4 text-center">
-❌ รหัสผ่านไม่ถูกต้อง
-</div>
+<input id="adminPass" type="password"
+placeholder="รหัสเข้าสู่ระบบ"
+class="w-full py-3 px-4 rounded-lg border bg-[#fcfaf8]">
 
-<form method="post" action="/admin/login" class="space-y-4">
-
-<div>
-<label class="text-sm font-semibold">Admin Username</label>
-<input name="name" required
-class="mt-1 w-full py-3 px-4 rounded-lg border bg-[#fcfaf8] focus:ring-2 focus:ring-primary outline-none">
-</div>
-
-<div>
-<label class="text-sm font-semibold">System Password</label>
-<input name="password" type="password" required
-class="mt-1 w-full py-3 px-4 rounded-lg border bg-[#fcfaf8] focus:ring-2 focus:ring-primary outline-none">
-</div>
-
-<button class="w-full bg-primary hover:bg-primary/90 text-white font-bold py-4 rounded-lg shadow-md">
-เข้าสู่ระบบผู้ดูแล
+<button onclick="loginAdmin()"
+class="w-full bg-primary text-white font-bold py-4 rounded-lg">
+เข้าสู่ระบบ
 </button>
 
-</form>
-
-<div class="text-center text-xs text-gray-400 mt-4">
 </div>
 
 </div>
+</div>
+<!-- Admin Alert -->
+<div id="adminAlert" class="fixed inset-0 hidden bg-black/40 items-center justify-center z-50">
+  <div class="bg-white rounded-xl p-6 w-72 text-center shadow-xl">
+
+    <div class="text-red-500 mb-2">
+      <span class="text-4xl font-bold text-red-500">&times;</span>
+    </div>
+
+    <p id="adminAlertText" class="text-sm mb-4"></p>
+
+    <button onclick="closeAdminAlert()"
+      class="w-full bg-primary text-white py-2 rounded-lg font-semibold">
+      ตกลง
+    </button>
+
+  </div>
 </div>
 
 <script>
-const params = new URLSearchParams(window.location.search)
-const errorBox = document.getElementById("error-box")
+async function loginAdmin(){
 
-if(params.get("error") === "1"){
-errorBox.classList.remove("hidden")
+const name = adminName.value.trim()
+const pass = adminPass.value.trim()
+
+if(!name) return showAlert("กรุณากรอกชื่อ")
+if(!pass) return showAlert("กรุณากรอกรหัสผ่าน")
+
+const r = await fetch("/admin/login",{
+  credentials:"include",
+  method:"POST",
+  headers:{ "Content-Type":"application/json"},
+  body:JSON.stringify({
+    name,
+    password:pass
+  })
+})
+
+console.log("STATUS =", r.status)
+
+// 🔥 force popup
+if(r.status === 401){
+    showAlert("รหัสผ่านไม่ถูกต้อง")
+    return
 }
 
-if(window.location.search){
-history.replaceState({}, "", "/login_admin")
+if(!r.ok){
+  showAlert("Login ไม่สำเร็จ")
+  return
+}
+
+const data = await r.json()
+
+localStorage.setItem("admin_staff_name", data.name)
+
+location.href="/admin"
+}
+function showAlert(msg){
+  const box = document.getElementById("adminAlert")
+  const text = document.getElementById("adminAlertText")
+
+  text.innerText = msg
+  box.classList.remove("hidden")
+  box.classList.add("flex")
+}
+
+function closeAdminAlert(){
+  adminAlert.classList.add("hidden")
+  adminAlert.classList.remove("flex")
 }
 </script>
 
