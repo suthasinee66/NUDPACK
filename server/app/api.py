@@ -1,4 +1,5 @@
 # server/app/api.py
+from fileinput import filename
 from typing import Optional
 from fastapi import FastAPI, HTTPException, Query, Response, Request, Header, Depends,Form
 from fastapi.responses import RedirectResponse,FileResponse, JSONResponse
@@ -14,6 +15,7 @@ from .models import thai_now
 from datetime import datetime, timedelta
 from pathlib import Path
 from .admin_auth import require_admin, verify_admin_password
+from urllib.parse import quote
 
 try:
     import pandas as pd
@@ -50,9 +52,9 @@ from fastapi.middleware.cors import CORSMiddleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:8000",
-        "http://127.0.0.1:8000",
-        "http://192.168.249.105:8000",
+        "https://localhost:8000",
+        "https://127.0.0.1:8000",
+        "https://192.168.249.105:8000",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -90,7 +92,13 @@ def login_page():
 @app.get("/logout")
 def logout(request: Request):
     request.session.clear()
-    return RedirectResponse("/login_client")
+    response = RedirectResponse("/login_client", status_code=302)
+
+    # กัน cache
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+
+    return response
 
 @app.get("/admin/login")
 def admin_login_page():
@@ -107,6 +115,28 @@ def admin_logout(request: Request):
     request.session.clear()   # 👈 สำคัญสุด
 
     response = RedirectResponse("/login_admin", status_code=302)
+
+    # กัน cache
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+
+    return response
+
+@app.get("/recipient/login")
+def recipient_login_page():
+    return RedirectResponse("/login_recipient", status_code=302)
+
+@app.get("/login_recipient")
+def login_recipient_alias(request: Request):
+    request.session.clear()   # 👈 ตัด session admin ทิ้งทุกครั้ง
+    return FileResponse(str(CLIENT_STATIC / "login_recipient.html"))
+
+@app.get("/recipient/logout")
+def recipient_logout(request: Request):
+
+    request.session.clear()   # 👈 สำคัญสุด
+
+    response = RedirectResponse("/login_recipient", status_code=302)
 
     # กัน cache
     response.headers["Cache-Control"] = "no-store"
@@ -149,6 +179,33 @@ def admin_ui(request: Request):
 
     raise HTTPException(status_code=404, detail="admin.html not found")
 
+class RecipientLoginIn(BaseModel):
+    name: str
+
+@app.post("/recipient/login")
+def recipient_login(payload: RecipientLoginIn, request: Request):
+
+    request.session["recipient"] = {
+        "name": payload.name
+    }
+
+    return {"ok": True, "name": payload.name}
+
+
+@app.get("/recipient")
+def recipient_ui(request: Request):
+    if not request.session.get("recipient"):
+        return RedirectResponse("/login_recipient")
+
+    server_recipient = SERVER_STATIC / "recipient.html"
+    if server_recipient.exists():
+        return FileResponse(str(server_recipient))
+
+    client_recipient = CLIENT_STATIC / "recipient.html"
+    if client_recipient.exists():
+        return FileResponse(str(client_recipient))
+
+    raise HTTPException(status_code=404, detail="recipient.html not found")
 
 
 # Startup: init DB
@@ -195,6 +252,7 @@ def create_parcel(p: ParcelIn, request: Request):
     try:
         carrier_id = request.session.get("carrier_id")
         carrier_staff = request.session.get("carrier_staff_name")
+
         if not carrier_id:
             raise HTTPException(401, "not logged in")
 
@@ -250,6 +308,7 @@ def create_parcel(p: ParcelIn, request: Request):
                           user="client", details=f"tracking={p.tracking_number}, provisional={p.provisional}")
             db.add(al)
             db.commit()
+            db.refresh(parcel)
         except Exception:
             db.rollback()  # don't fail creation if audit fails
 
@@ -272,6 +331,7 @@ def confirm_pending(tracking: str):
         p.status = "ยังไม่ได้รับ"
         db.add(p)
         db.commit()
+        db.refresh(p)
 
         # audit
         try:
@@ -329,6 +389,7 @@ def search_parcels(
                     "queue_number": p.queue_number,
                     "status": p.status,
                     "recipient_name": p.recipient_name,
+                    "admin_staff_name": p.admin_staff_name,
                     "created_at": p.created_at.isoformat() if p.created_at else None,
                     "picked_up_at": p.picked_up_at.isoformat() if p.picked_up_at else None,
                 }
@@ -377,6 +438,7 @@ def pickup_parcel(tracking: str):
         p.picked_up_at = thai_now()
         db.add(p)
         db.commit()
+        db.refresh(p)
 
         # audit
         try:
@@ -473,6 +535,7 @@ def verify_parcel(tracking: str):
             "tracking": p.tracking_number,
             "queue_number": p.queue_number,
             "recipient_name": p.recipient_name,
+            "admin_staff_name": p.admin_staff_name,
             "status": p.status,
             "picked_up_at": p.picked_up_at.isoformat() if p.picked_up_at else None
         }
@@ -481,61 +544,77 @@ def verify_parcel(tracking: str):
 
 
 @app.post("/api/parcels/{tracking}/confirm_pickup")
-def confirm_pickup(tracking: str, payload: ConfirmPickupIn):
+def confirm_pickup(
+    tracking: str,
+    payload: ConfirmPickupIn,
+    admin = Depends(require_admin)
+):
     db = SessionLocal()
     try:
-        p = db.query(Parcel).filter(Parcel.tracking_number == tracking).first()
+        p = db.query(Parcel).filter(
+            Parcel.tracking_number == tracking
+        ).first()
+
         if not p:
             raise HTTPException(status_code=404, detail="parcel not found")
 
-        if p.status == "ได้รับแล้ว":
-            # already picked — but still allow updating recipient_name if provided?
-            if payload.recipient_name and p.recipient_name != payload.recipient_name:
-                p.recipient_name = payload.recipient_name
-                p.picked_up_at = datetime.now()
-                db.add(p)
-                db.commit()
-            return {"ok": False, "message": "รับไปแล้ว"}
+        if not payload.recipient_name or not payload.recipient_name.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="ต้องกรอกชื่อผู้รับก่อนยืนยันรับพัสดุ"
+            )
 
-        # (optional) Verify that tracking matches the queue or other checks can go here
-
-        # update recipient name if provided
-        if payload.recipient_name:
+        # -----------------------------
+        # กรณีรับไปแล้ว
+        # -----------------------------
+        if p.picked_up_at:
             p.recipient_name = payload.recipient_name
 
-        p.status = "ได้รับแล้ว"
-        p.picked_up_at = thai_now()   # ✅ สวยสุด ใช้ที่เดียวกับ created_at
+            # ✅ อัปเดต admin เฉพาะตอนที่ยังเป็น null
+            if not p.admin_staff_name:
+                p.admin_staff_name = admin["name"]
 
-        db.add(p)
-        db.commit()
-
-        # audit
-        try:
-            al = AuditLog(entity="parcel", entity_id=p.id, action="pickup_confirm",
-                          user=payload.scanner_id or "server_ui",
-                          details=f"confirmed by {payload.scanner_id or 'server_ui'}; recipient={p.recipient_name}")
-            db.add(al)
             db.commit()
-        except Exception:
-            db.rollback()
+            db.refresh(p)
+
+            return {
+                "ok": True,
+                "message": "พัสดุรับไปแล้ว",
+                "admin_staff_name": p.admin_staff_name,
+                "picked_up_at": p.picked_up_at.isoformat()
+            }
+
+        # -----------------------------
+        # กรณียังไม่รับ
+        # -----------------------------
+        p.status = "ได้รับแล้ว"
+        p.recipient_name = payload.recipient_name
+
+        # ✅ ใส่ admin ได้เลย (ยังไม่เคยรับ)
+        p.admin_staff_name = admin["name"]
+        p.picked_up_at = thai_now()
+
+        db.commit()
+        db.refresh(p)
 
         return {
             "ok": True,
             "tracking": p.tracking_number,
             "queue_number": p.queue_number,
-            "recipient": p.recipient_name,
-            "picked_up_at": p.picked_up_at.isoformat() if p.picked_up_at else None
+            "admin_staff_name": p.admin_staff_name,
+            "picked_up_at": p.picked_up_at.isoformat()
         }
 
     finally:
         db.close()
 
 
+
 # ---------------------------
 # Reports: dates (for dropdown), summary, timeseries, export
 # ---------------------------
 @app.get("/api/reports/dates")
-def get_available_periods(period: str = Query("daily", regex="^(daily|monthly|yearly)$")):
+def get_available_periods(period: str = Query("daily", regex="^(daily|monthly|yearly)$"),admin = Depends(require_admin)):
     db = SessionLocal()
     try:
         rows = db.query(Parcel).order_by(Parcel.created_at).all()
@@ -557,29 +636,41 @@ def get_available_periods(period: str = Query("daily", regex="^(daily|monthly|ye
         db.close()
 
 @app.get("/api/reports/summary")
-def report_summary(period: str = Query("daily", regex="^(daily|monthly|yearly)$"), date: Optional[str] = None):
+def report_summary(
+    period: str = Query("daily", regex="^(daily|monthly|yearly)$"),
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+    admin = Depends(require_admin)
+):
     db = SessionLocal()
     try:
         rows = db.query(Parcel).order_by(Parcel.created_at.desc()).all()
+
         checkin = 0
         checkout = 0
         items = []
+
         for p in rows:
             dt = p.created_at
-            if date:
-                if not dt:
-                    continue
-                if period == "daily":
-                    key = dt.strftime("%Y%m%d")
-                elif period == "monthly":
-                    key = dt.strftime("%Y%m")
-                else:
-                    key = dt.strftime("%Y")
-                if key != date:
-                    continue
+            if not dt:
+                continue
+
+            if period == "daily":
+                key = dt.strftime("%Y%m%d")
+            elif period == "monthly":
+                key = dt.strftime("%Y%m")
+            else:
+                key = dt.strftime("%Y")
+
+            if start and key < start:
+                continue
+            if end and key > end:
+                continue
+
             checkin += 1
             if p.status == "ได้รับแล้ว":
                 checkout += 1
+
             items.append({
                 "id": p.id,
                 "tracking": p.tracking_number,
@@ -589,14 +680,25 @@ def report_summary(period: str = Query("daily", regex="^(daily|monthly|yearly)$"
                 "created_at": dt.isoformat() if dt else None,
                 "picked_up_at": p.picked_up_at.isoformat() if p.picked_up_at else None
             })
+
         remaining = checkin - checkout
-        return {"period": period, "date": date, "checkin": checkin, "checkout": checkout, "remaining": remaining, "items": items[:200]}
+
+        return {
+            "period": period,
+            "start": start,
+            "end": end,
+            "checkin": checkin,
+            "checkout": checkout,
+            "remaining": remaining,
+            "items": items
+        }
+
     finally:
         db.close()
 
 @app.get("/api/reports/timeseries")
 def reports_timeseries(period: str = Query("daily", regex="^(daily|monthly|yearly)$"),
-                       start: Optional[str] = None, end: Optional[str] = None, limit: int = 365):
+                       start: Optional[str] = None, end: Optional[str] = None, limit: int = 365,admin = Depends(require_admin)):
     db = SessionLocal()
     try:
         rows = db.query(Parcel).order_by(Parcel.created_at).all()
@@ -635,7 +737,13 @@ def reports_timeseries(period: str = Query("daily", regex="^(daily|monthly|yearl
         db.close()
 
 @app.get("/api/reports/export")
-def export_report(period: str = "daily", date: Optional[str] = None, fmt: str = "csv"):
+def export_report(
+    period: str = "daily",
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+    fmt: str = "csv",
+    admin = Depends(require_admin)
+):
     """
     Export report filtered by period/date into CSV or XLSX.
     - period: daily|monthly|yearly
@@ -660,17 +768,17 @@ def export_report(period: str = "daily", date: Optional[str] = None, fmt: str = 
         for p in rows:
             dt = p.created_at
             # if date filter provided, compute key and compare
-            if date:
-                if not dt:
-                    continue
-                if period == "daily":
-                    key = dt.strftime("%Y%m%d")
-                elif period == "monthly":
-                    key = dt.strftime("%Y%m")
-                else:
-                    key = dt.strftime("%Y")
-                if key != date:
-                    continue
+            if period == "daily":
+                key = dt.strftime("%Y%m%d")
+            elif period == "monthly":
+                key = dt.strftime("%Y%m")
+            else:
+                key = dt.strftime("%Y")
+
+            if start and key < start:
+                continue
+            if end and key > end:
+                continue
 
             checkin += 1
             if p.status == "ได้รับแล้ว":
@@ -688,35 +796,75 @@ def export_report(period: str = "daily", date: Optional[str] = None, fmt: str = 
             })
 
         remaining = checkin - checkout
+        # ---------- format period to thai date ----------
+        def fmt_key(k: str | None):
+            if not k:
+                return ""
+            try:
+                if period == "daily" and len(k) == 8:
+                    d = datetime.strptime(k, "%Y%m%d")
+                    return d.strftime("%d/%m/%Y")
+                if period == "monthly" and len(k) == 6:
+                    d = datetime.strptime(k, "%Y%m")
+                    return d.strftime("%m/%Y")
+                if period == "yearly" and len(k) == 4:
+                    return k
+            except Exception:
+                pass
+            return k
+
+        start_fmt = fmt_key(start)
+        end_fmt = fmt_key(end)
 
     finally:
         db.close()
 
     # Prepare filename
-    safe_date = date or "all"
-    fname_base = f"parcel_report_{period}_{safe_date}"
+    safe_start = (start_fmt or "ทั้งหมด").replace("/", "-")
+    safe_end = (end_fmt or "ทั้งหมด").replace("/", "-")
+    fname_base = f"รายงานพัสดุ_ช่วงวันที่_{safe_start}_ถึง_{safe_end}"
     # CSV branch (or fallback if pandas not available)
     if fmt == "csv" or not PANDAS_AVAILABLE:
         buffer = io.StringIO()
         writer = csv.writer(buffer)
+        # ===== period =====
+        writer.writerow(["ช่วงวันที่", f"{start_fmt} ถึง {end_fmt}"])
+        writer.writerow([])
+        # ===== summary =====
+        writer.writerow(["พัสดุเข้า", checkin])
+        writer.writerow(["พัสดุออก", checkout])
+        writer.writerow(["พัสดุคงเหลือ", remaining])
+        writer.writerow([])
 
-        # write summary rows first
-        writer.writerow(["Check-in", str(checkin)])
-        writer.writerow(["Check-out", str(checkout)])
-        writer.writerow(["Remaining", str(remaining)])
-        writer.writerow([])  # blank line
+        # ===== thai header =====
+        headers = [
+            "เลขคิว",
+            "เลขพัสดุ",
+            "สถานะ",
+            "ชื่อผู้รับ",
+            "ชื่อเจ้าหน้าที่",
+            "วันที่พัสดุเข้า"
+        ]
+        writer.writerow(headers)
 
-        # write header + rows
-        fieldnames = ["id", "tracking_number", "queue_number", "status", "recipient_name", "admin_staff_name", "created_at"]
-        writer.writerow(fieldnames)
+        # ===== rows =====
         for r in items:
-            writer.writerow([r.get(f) for f in fieldnames])
-
+            writer.writerow([
+                r.get("queue_number"),
+                r.get("tracking_number"),
+                r.get("status"),
+                r.get("recipient_name"),
+                r.get("admin_staff_name"),
+                r.get("created_at")
+            ])
+        filename = f"{fname_base}.csv"
+        filename_star = quote(filename)
         content = buffer.getvalue()
         return Response(
             content=content,
-            media_type="text/csv",
-            headers={"Content-Disposition": f'attachment; filename="{fname_base}.csv"'}
+            media_type="text/csv; charset=utf-8-sig",   # ✅ Excel เปิดไทยไม่เพี้ยน
+            headers={
+        "Content-Disposition": f"attachment; filename*=UTF-8''{filename_star}"}
         )
 
     # XLSX branch using pandas -> openpyxl engine
@@ -737,21 +885,25 @@ def export_report(period: str = "daily", date: Optional[str] = None, fmt: str = 
         # write summary on top-left of the same sheet
         ws = writer.sheets["parcels"]
         # Excel rows are 1-indexed
-        ws.cell(row=1, column=1, value="Check-in")
+        ws.cell(row=1, column=1, value="พัสดุเข้า")
         ws.cell(row=1, column=2, value=checkin)
-        ws.cell(row=2, column=1, value="Check-out")
+        ws.cell(row=2, column=1, value="พัสดุออก")
         ws.cell(row=2, column=2, value=checkout)
-        ws.cell(row=3, column=1, value="Remaining")
+        ws.cell(row=3, column=1, value="พัสดุคงเหลือ")
         ws.cell(row=3, column=2, value=remaining)
 
         # optionally freeze panes so header is visible
         ws.freeze_panes = "A6"
 
     buffer.seek(0)
+
+    filename = f"{fname_base}.xlsx"
+    filename_star = quote(filename)
     return Response(
         content=buffer.read(),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{fname_base}.xlsx"'}
+        headers={
+        "Content-Disposition": f"attachment; filename*=UTF-8''{filename_star}"}
     )
 
 

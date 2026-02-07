@@ -22,7 +22,7 @@ class Parcel(Base):
     queue_number = Column(String, index=True, nullable=True)
     status = Column(String, default="IN")
     recipient_name = Column(String, nullable=True)
-    admin_staff_name = Column(String)
+    admin_staff_name = Column(String, nullable=True)
     picked_up_at = Column(DateTime(timezone=True), index=True, nullable=True)
 
 
