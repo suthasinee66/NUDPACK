@@ -684,13 +684,14 @@ async function confirmPickup(tracking) {
   confirming = true
 
   try {
-    await fetch(`/api/parcels/${tracking}/confirm_pickup`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        recipient_name: document.getElementById("recipient").value
-      })
-    })
+    await fetch(`/api/parcels/${encodeURIComponent(tracking)}/pickup`, {
+  method: "POST",
+  credentials: "include",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    recipient_name: recipientToSend
+  })
+})
   } finally {
     confirming = false
   }

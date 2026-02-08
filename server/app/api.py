@@ -12,10 +12,11 @@ from sqlalchemy import or_, and_
 import io, csv
 from starlette.middleware.sessions import SessionMiddleware
 from .models import thai_now
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta , timezone
 from pathlib import Path
 from .admin_auth import require_admin, verify_admin_password
 from urllib.parse import quote
+from sqlalchemy.orm import Session
 
 try:
     import pandas as pd
@@ -38,6 +39,24 @@ app = FastAPI(title="ParcelServer API")
 from fastapi.middleware.cors import CORSMiddleware
 BASE_DIR = Path(__file__).resolve().parent
 SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", "parcel-session-secret")
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+def write_audit(db, *, entity, entity_id, action, user, details):
+    log = AuditLog(
+        entity=entity,
+        entity_id=entity_id,
+        action=action,
+        user=user,
+        details=details
+    )
+    db.add(log)
+
 
 app.add_middleware(
     SessionMiddleware,
@@ -207,7 +226,20 @@ def recipient_ui(request: Request):
 
     raise HTTPException(status_code=404, detail="recipient.html not found")
 
+from fastapi.templating import Jinja2Templates
 
+BASE_DIR = Path(__file__).resolve().parents[1]
+templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+
+@app.get("/audit")
+def audit_page(request: Request):
+    if not request.session.get("admin"):
+        return RedirectResponse("/login_admin")
+
+    return templates.TemplateResponse(
+        "audit.html",
+        {"request": request}
+    )
 # Startup: init DB
 @app.on_event("startup")
 def on_startup():
@@ -304,9 +336,14 @@ def create_parcel(p: ParcelIn, request: Request):
 
         # Audit log (best-effort)
         try:
-            al = AuditLog(entity="parcel", entity_id=parcel.id, action="create",
-                          user="client", details=f"tracking={p.tracking_number}, provisional={p.provisional}")
-            db.add(al)
+            write_audit(
+                db,
+                entity="พัสดุ",
+                entity_id=parcel.id,
+                action="เพิ่มหมายเลขพัสดุ",
+                user=f"พนักงานขนส่ง: {carrier_staff}",
+                details=f"หมายเลขพัสดุ: {parcel.tracking_number}"
+            )
             db.commit()
             db.refresh(parcel)
         except Exception:
@@ -320,9 +357,10 @@ def create_parcel(p: ParcelIn, request: Request):
 # Confirm pending -> RECEIVED
 # ---------------------------
 @app.post("/api/parcels/{tracking}/confirm_pending")
-def confirm_pending(tracking: str):
+def confirm_pending(tracking: str, request: Request):
     db = SessionLocal()
     try:
+        carrier_staff = request.session.get("carrier_staff_name")
         p = db.query(Parcel).filter(Parcel.tracking_number == tracking).first()
         if not p:
             raise HTTPException(status_code=404, detail="parcel not found")
@@ -333,14 +371,15 @@ def confirm_pending(tracking: str):
         db.commit()
         db.refresh(p)
 
-        # audit
-        try:
-            al = AuditLog(entity="parcel", entity_id=p.id, action="confirm_pending", user="server_ui",
-                          details=f"confirmed pending by ui")
-            db.add(al)
-            db.commit()
-        except Exception:
-            db.rollback()
+        write_audit(
+            db,
+            entity="พัสดุ", 
+            entity_id=p.id, 
+            action="ยืนยันการเพิ่มหมายเลขพัสดุ", 
+            user=f"พนักงานขนส่ง: {carrier_staff}",
+            details=f"หมายเลขพัสดุ: {p.tracking_number}"
+        )
+        db.commit()
 
         return {
             "ok": True,
@@ -426,28 +465,44 @@ def get_parcel(tracking: str):
 # Pickup (confirm) endpoint (simple)
 # ---------------------------
 @app.post("/api/parcels/{tracking}/pickup")
-def pickup_parcel(tracking: str):
+def pickup_parcel(
+    tracking: str,
+    payload: ConfirmPickupIn,
+    request: Request
+):
+    recipient = request.session.get("recipient")
+    if not recipient:
+        raise HTTPException(401, "not logged in")
+
     db = SessionLocal()
     try:
-        p = db.query(Parcel).filter(Parcel.tracking_number == tracking).first()
+        p = db.query(Parcel).filter(
+            Parcel.tracking_number == tracking
+        ).first()
         if not p:
-            raise HTTPException(status_code=404, detail="not found")
+            raise HTTPException(404, "parcel not found")
+
         if p.status == "ได้รับแล้ว":
             return {"ok": True, "message": "รับไปแล้ว"}
+
+        if not payload.recipient_name or not payload.recipient_name.strip():
+            raise HTTPException(400, "ต้องกรอกชื่อผู้รับ")
+
         p.status = "ได้รับแล้ว"
+        p.recipient_name = payload.recipient_name
         p.picked_up_at = thai_now()
-        db.add(p)
+
         db.commit()
         db.refresh(p)
-
-        # audit
-        try:
-            al = AuditLog(entity="parcel", entity_id=p.id, action="pickup", user="server_ui",
-                          details=f"ยืนยันการรับแล้ว")
-            db.add(al)
-            db.commit()
-        except Exception:
-            db.rollback()
+        write_audit(
+            db,
+            entity="พัสดุ",
+            entity_id=p.id,
+            action="ได้รับพัสดุ",
+            user=f"ผู้รับ: {recipient['name']}",
+            details=f"หมายเลขพัสดุ: {p.tracking_number}"
+        )
+        db.commit()
 
         return {"ok": True}
     finally:
@@ -542,7 +597,7 @@ def verify_parcel(tracking: str):
     finally:
         db.close()
 
-
+from .models import AuditLog
 @app.post("/api/parcels/{tracking}/confirm_pickup")
 def confirm_pickup(
     tracking: str,
@@ -577,6 +632,16 @@ def confirm_pickup(
             db.commit()
             db.refresh(p)
 
+            write_audit(
+                db,
+                entity="พัสดุ",
+                entity_id=p.id,
+                action="ยืนยันการรับพัสดุ",
+                user=f"เจ้าหน้าที่: {admin['name']}",
+                details=f"ผู้รับ: {p.recipient_name} , หมายเลขพัสดุ: {p.tracking_number}"
+            )
+            db.commit()
+
             return {
                 "ok": True,
                 "message": "พัสดุรับไปแล้ว",
@@ -596,7 +661,16 @@ def confirm_pickup(
 
         db.commit()
         db.refresh(p)
-
+        write_audit(
+            db,
+            entity="พัสดุ",
+            entity_id=p.id,
+            action="ยืนยันการรับพัสดุ",
+            user=f"เจ้าหน้าที่: {admin['name']}",
+            details=f"ผู้รับ: {p.recipient_name} , หมายเลขพัสดุ: {p.tracking_number}"
+        )
+        db.commit()
+        
         return {
             "ok": True,
             "tracking": p.tracking_number,
@@ -608,7 +682,50 @@ def confirm_pickup(
     finally:
         db.close()
 
+@app.post("/api/parcels/{tracking}/confirm_pickup/recipient")
+def confirm_pickup_recipient(
+    tracking: str,
+    payload: ConfirmPickupIn,
+    request: Request
+):
+    db = SessionLocal()
+    recipient = request.session.get("recipient")
+    if not recipient:
+        raise HTTPException(status_code=401, detail="not logged in")
 
+    try:
+        p = db.query(Parcel).filter(Parcel.tracking_number == tracking).first()
+        if not p:
+            raise HTTPException(status_code=404, detail="parcel not found")
+
+        # ---------- รับครั้งแรก ----------
+        if payload.recipient_name:
+            p.recipient_name = payload.recipient_name
+
+        p.status = "ได้รับแล้ว"
+        p.picked_up_at = thai_now()
+
+        write_audit(
+            db,
+            entity="พัสดุ",
+            entity_id=p.id,
+            action="ได้รับพัสดุ",
+            user=f"ผู้รับ: {recipient['name']}",
+            details=f"หมายเลขพัสดุ: {p.tracking_number}"
+        )
+
+        db.commit()
+
+        return {
+            "ok": True,
+            "tracking": p.tracking_number,
+            "queue_number": p.queue_number,
+            "recipient": p.recipient_name,
+            "picked_up_at": p.picked_up_at.isoformat()
+        }
+
+    finally:
+        db.close()
 
 # ---------------------------
 # Reports: dates (for dropdown), summary, timeseries, export
@@ -958,17 +1075,14 @@ def bulk_delete_parcels(
             db.delete(p)
 
         
-            try:
-                al = AuditLog(
-                    entity="parcel",
-                    entity_id=p.id,
-                    action="delete",
-                    user=admin_name,
-                    details=f"tracking={p.tracking_number}"
-                )
-                db.add(al)
-            except Exception:
-                pass
+            write_audit(
+                db,
+                entity="พัสดุ",
+                entity_id=p.id,
+                action="ลบรายการพัสดุ",
+                user=f"เจ้าหน้าที่: {admin_name}",
+                details=f"หมายเลขพัสดุ: {p.tracking_number}"
+            )
 
         db.commit()
         return {"ok": True, "deleted": count}
@@ -1027,5 +1141,79 @@ def list_carriers():
     finally:
         db.close()
 
+from sqlalchemy import or_
 
+@app.get("/api/audit_logs")
+def list_audit_logs(
+    limit: int = 200,
+    before: str | None = None,
+    q: str | None = None,
+    action: str | None = None,
+    date: str | None = None, 
+    admin = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    query = db.query(AuditLog)
+        # ---------- date filter ----------
+    
+
+    if date:
+        day = datetime.strptime(date, "%Y-%m-%d")
+
+        # ไทย = UTC+7
+        start_local = day.replace(
+            hour=0, minute=0, second=0, microsecond=0,
+            tzinfo=timezone(timedelta(hours=7))
+        )
+
+        start_utc = start_local.astimezone(timezone.utc)
+        end_utc = start_utc + timedelta(days=1)
+
+        query = query.filter(
+            AuditLog.timestamp >= start_utc,
+            AuditLog.timestamp < end_utc
+        )
+
+    # filter action
+    if action:
+        query = query.filter(AuditLog.action == action)
+
+    # search
+    if q:
+        like = f"%{q}%"
+        query = query.filter(
+            or_(
+                AuditLog.user.ilike(like),
+                AuditLog.details.ilike(like),
+                AuditLog.entity.ilike(like),
+            )
+        )
+
+    # 👇 load older than timestamp
+    if before:
+        try:
+            before_dt = datetime.fromisoformat(before)
+            query = query.filter(AuditLog.timestamp < before_dt)
+        except Exception:
+            pass
+
+    logs = (
+        query
+        .order_by(AuditLog.timestamp.desc())
+        .limit(limit)
+        .all()
+    )
+
+    return [
+        {
+            "id": l.id,
+            "entity": l.entity,
+            "entity_id": l.entity_id,
+            "action": l.action,
+            "user": l.user,
+            "details": l.details,
+            "timestamp": l.timestamp.isoformat()
+        }
+        for l in logs
+    ]
 # EOF
