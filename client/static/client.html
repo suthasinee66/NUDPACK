@@ -106,7 +106,7 @@ hover:bg-red-100 active:scale-95 transition">
         id="parcelAmount"
         type="number"
         min="1"
-        class="flex-1 border rounded-lg h-12 px-3 focus:outline-none focus:ring-2 focus:ring-primary/50"
+        class="flex-1 border rounded-lg h-12 w-10 focus:outline-none focus:ring-2 focus:ring-primary/50"
         placeholder="เช่น 50" 
       />
       <button 
@@ -118,7 +118,11 @@ hover:bg-red-100 active:scale-95 transition">
 
     <!-- แสดงช่วงคิว -->
     <div id="queueRangeInfo" class="text-sm text-green-600 mt-2 hidden"></div>
-
+    <button id="clearQueueBtn"
+    onclick="clearActiveQueue()"
+    class="mt-3 w-full bg-red-500 text-white py-2 rounded-xl text-sm hidden">
+    ล้างคิวที่กำลังใช้งาน
+    </button>
     <div class="border-t my-5"></div>
 
     <!-- 🔒 กรอกเลขพัสดุ -->
@@ -528,6 +532,7 @@ async function reserveQueue() {
     const info = document.getElementById("queueRangeInfo");
     info.innerText = `จองคิวสำเร็จ: ${data.start} - ${data.end}`;
     info.classList.remove("hidden");
+    document.getElementById("clearQueueBtn").classList.remove("hidden");
 
     // 🔓 ปลดล็อก scan
     document.getElementById("scanInput").disabled = false;
@@ -587,6 +592,7 @@ function restoreQueueState() {
   const info = document.getElementById("queueRangeInfo");
   info.innerText = `กำลังใช้งานคิว: ${start} - ${end}`;
   info.classList.remove("hidden");
+  document.getElementById("clearQueueBtn").classList.remove("hidden");
 
   // 🔒 ล็อกช่องจำนวน
   document.getElementById("parcelAmount").disabled = true;
@@ -624,7 +630,49 @@ function refreshAfterQueueEnd() {
   localStorage.removeItem("current_seq")
   location.reload()
 }
+function clearActiveQueue() {
+  const confirmClear = confirm("คุณต้องการล้างคิวที่กำลังใช้งานใช่หรือไม่?");
 
+  if (!confirmClear) return;
+
+  // ลบข้อมูลคิว
+  localStorage.removeItem("range_start");
+  localStorage.removeItem("range_end");
+  localStorage.removeItem("current_seq");
+
+  // รีเซ็ต UI
+  document.getElementById("queueRangeInfo").classList.add("hidden");
+
+  document.getElementById("parcelAmount").disabled = false;
+
+  // 🔒 ปิด scan
+  const scanInput = document.getElementById("scanInput");
+  const scanBtn = document.getElementById("scanBtn");
+
+  scanInput.disabled = true;
+  scanInput.classList.add("bg-gray-100");
+
+  scanBtn.disabled = true;
+  scanBtn.classList.remove("bg-primary");
+  scanBtn.classList.add("bg-gray-400");
+
+  // 🔒 ปิดกล้อง
+  const camOn = document.getElementById("cameraOnBtn");
+  const camOff = document.getElementById("cameraOffBtn");
+
+  camOn.disabled = true;
+  camOn.classList.remove("bg-primary");
+  camOn.classList.add("bg-gray-400");
+
+  camOff.disabled = true;
+  camOff.classList.remove("border");
+  camOff.classList.add("bg-gray-300", "text-gray-500");
+
+  // ซ่อนปุ่มล้างคิว
+  document.getElementById("clearQueueBtn").classList.add("hidden");
+
+  alert("ล้างคิวเรียบร้อยแล้ว");
+}
     </script>
     <!-- Queue Popup -->
 
