@@ -516,6 +516,7 @@ def list_parcels(
     limit: int = 500,
     status: Optional[str] = Query(None),
     date: Optional[str] = Query(None),   # "today" | "YYYY-MM-DD" | None
+    queue: Optional[str] = Query(None),
     admin = Depends(require_admin)
 ):
     db = SessionLocal()
@@ -545,6 +546,14 @@ def list_parcels(
         # ================= STATUS FILTER =================
         if status and status != "ทั้งหมด":
             q = q.filter(Parcel.status == status)
+        
+        # ================= STATUS FILTER =================
+        if status and status != "ทั้งหมด":
+            q = q.filter(Parcel.status == status)
+
+        # ================= QUEUE FILTER =================
+        if queue:
+            q = q.filter(Parcel.queue_number.ilike(f"%{queue}%"))
 
         rows = (
             q.order_by(Parcel.created_at.asc())
