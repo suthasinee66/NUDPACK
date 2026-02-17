@@ -15,7 +15,8 @@ Base = declarative_base()
 
 def init_db():
     # import models so classes register to Base
-    from server.app.models import CarrierList  # 👈 เพิ่ม
+    from server.app.models import CarrierList, QueueSection, Parcel  # 👈 เพิ่มทั้งหมดที่มี model
+
     Base.metadata.create_all(bind=engine)
 
     db = SessionLocal()
@@ -39,8 +40,21 @@ def init_db():
 
         db.commit()
 
+    # 🔥 seed QueueSection ครั้งแรก
+    if db.query(QueueSection).count() == 0:
+        start = 1
+        for i in range(20):
+            end = start + 49
+            db.add(QueueSection(
+                start_seq=start,
+                end_seq=end,
+            ))
+            start = end + 1
+
+        db.commit()
 
     db.close()
+
 
 
 def get_db() -> Generator:
