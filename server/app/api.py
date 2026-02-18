@@ -278,8 +278,7 @@ class BulkDeleteIn(BaseModel):
 # ---------------------------
 # Create parcel (check-in / provisional)
 # ---------------------------
-from sqlalchemy import cast, Integer, func
-
+from sqlalchemy import cast, Integer
 @app.post("/api/parcels")
 def create_parcel(p: ParcelIn, request: Request):
     db = SessionLocal()
@@ -299,51 +298,36 @@ def create_parcel(p: ParcelIn, request: Request):
 
         # 🔥 lock section ที่เลือก
         # 🔥 หา reservation ที่ยัง active ของ carrier
-        reservations = (
+        today = thai_now().strftime("%Y%m%d")
+
+        reservation = (
             db.query(QueueReservation)
             .filter(
-                QueueReservation.carrier_id == carrier_id,
-                QueueReservation.status == "active"
+                QueueReservation.section_id == p.section_id,
+                QueueReservation.date == today,
+                QueueReservation.status.in_(["active", "unactive"])
             )
-
-            .order_by(QueueReservation.start_seq)
             .with_for_update()
-            .all()
+            .first()
         )
 
-        if not reservations:
+        if not reservation:
             raise HTTPException(400, "ยังไม่มีคิวที่จองไว้")
 
-        selected_reservation = None
-        next_queue = None
+        next_queue = reservation.current_seq + 1
 
-        for r in reservations:
-
-            last_queue = (
-                db.query(func.max(Parcel.queue_number))
-                .filter(Parcel.section_id == r.section_id)
-                .scalar()
-            )
-
-            last_queue = int(last_queue) if last_queue else None
-            candidate = (last_queue or (r.start_seq - 1)) + 1
-
-
-
-            if candidate <= r.end_seq:
-                selected_reservation = r
-                next_queue = candidate
-                break
-            else:
-                r.status = "หมดแล้ว"
-
-        if not selected_reservation:
+        if next_queue > reservation.end_seq:
+            reservation.status = "หมดแล้ว"
             db.commit()
-            raise HTTPException(400, "คิวเต็มทั้งหมดแล้ว")
+            raise HTTPException(400, "คิวเต็มแล้ว")
 
-        # ✅ อัปเดตตัวนับ
-        selected_reservation.current_seq = next_queue
+        reservation.current_seq = next_queue
         queue_number = str(next_queue)
+
+        if not p.provisional:
+            reservation.status = "unactive"
+
+
 
         status = "กำลังรอ" if p.provisional else "ยังไม่ได้รับ"
         parcel = Parcel(
@@ -354,7 +338,7 @@ def create_parcel(p: ParcelIn, request: Request):
             recipient_name=p.recipient_name,
             admin_staff_name=p.admin_staff_name,
             status=status,
-            section_id=selected_reservation.section_id,
+            section_id=reservation.section_id
 
         )
 
@@ -366,7 +350,8 @@ def create_parcel(p: ParcelIn, request: Request):
             "id": parcel.id,
             "queue_number": parcel.queue_number,
             "status": parcel.status,
-            "section_id": selected_reservation.id
+            "section_id": reservation.section_id
+
 
         }
 
@@ -398,6 +383,16 @@ def confirm_pending(tracking: str, request: Request):
         carrier_name = carrier.carrier_name if carrier else "Unknown"
         
         p.status = "ยังไม่ได้รับ"
+                # 🔥 เปิด section ให้จองได้ (เปลี่ยนเป็นเขียว)
+        reservation = db.query(QueueReservation).filter(
+            QueueReservation.section_id == p.section_id,
+            QueueReservation.carrier_id == p.carrier_id,
+            QueueReservation.status == "active"
+        ).first()
+
+        if reservation:
+            reservation.status = "unactive"
+
         db.add(p)
         db.commit()
         db.refresh(p)
@@ -1324,13 +1319,13 @@ def get_sections(db: Session = Depends(get_db)):
     return result
 
 # 🔥 ต้องอยู่นอก finally
+from sqlalchemy import func
 
 @app.get("/api/queue/sections_available")
 def get_available_sections(
     request: Request,
     db: Session = Depends(get_db)
 ):
-
     carrier_id = request.session.get("carrier_id")
     today = thai_now().strftime("%Y%m%d")
 
@@ -1338,39 +1333,29 @@ def get_available_sections(
         QueueSection.start_seq
     ).all()
 
-    reservations = db.query(QueueReservation).filter(
-        QueueReservation.status.in_(["active", "หมดแล้ว"]),
-        QueueReservation.date == today
-    ).all()
-
     result = []
 
     for s in sections:
 
-        status = "available"
-
-        # 🔴 เช็คก่อนเลยว่ามี parcel ที่ยังไม่ได้รับใน section นี้ไหม
-        has_unreceived = db.query(Parcel).filter(
-            Parcel.section_id == s.id,
-            Parcel.status == "ยังไม่ได้รับ"
+        reservation = db.query(QueueReservation).filter(
+            QueueReservation.section_id == s.id,
+            QueueReservation.date == today
         ).first()
 
-        if has_unreceived:
-            status = "blocked"   # 🔘 เทา
-        else:
-            for r in reservations:
-                if s.start_seq <= r.end_seq and s.end_seq >= r.start_seq:
+        if not reservation:
+            status = "available"
 
-                    if r.status == "หมดแล้ว":
-                        status = "full"
+        elif reservation.status == "active":
+            if reservation.carrier_id == carrier_id:
+                status = "mine"
+            else:
+                status = "blocked"
 
-                    elif r.carrier_id == carrier_id:
-                        status = "mine"
+        elif reservation.status == "unactive":
+            status = "available"
 
-                    else:
-                        status = "blocked"
-
-                    break
+        else:  # หมดแล้ว
+            status = "blocked"
 
         result.append({
             "id": s.id,
@@ -1379,8 +1364,8 @@ def get_available_sections(
             "status": status
         })
 
-
     return result
+
 
 from typing import List
 
@@ -1413,17 +1398,31 @@ def reserve_section(
 
         # 🔥 เช็คเฉพาะวันเดียวกัน
         overlap = db.query(QueueReservation).filter(
-            QueueReservation.status == "active",
-            QueueReservation.date == today,  # 🔥 สำคัญมาก
+            QueueReservation.date == today,
             QueueReservation.start_seq <= s.end_seq,
             QueueReservation.end_seq >= s.start_seq
         ).first()
 
         if overlap:
-            raise HTTPException(
-                400,
-                f"Section {s.start_seq}-{s.end_seq} ถูกจองแล้ว"
-            )
+
+            # ❌ ถ้ายัง active = ห้ามจอง
+            if overlap.status == "active":
+                raise HTTPException(
+                    400,
+                    f"Section {s.start_seq}-{s.end_seq} กำลังใช้งานอยู่"
+                )
+
+            # ❌ ถ้าหมดแล้ว = ห้าม
+            if overlap.status == "หมดแล้ว":
+                raise HTTPException(
+                    400,
+                    f"Section {s.start_seq}-{s.end_seq} ถูกปิดแล้ว"
+                )
+
+            # ✅ ถ้า unactive → อนุญาตให้จองต่อได้
+
+
+
 
         r = QueueReservation(
             section_id=s.id,
@@ -1475,7 +1474,8 @@ def cancel_reservation(
             QueueReservation.date == today,
             QueueReservation.start_seq == section.start_seq,
             QueueReservation.end_seq == section.end_seq,
-            QueueReservation.status.in_(["active", "หมดแล้ว"])
+            QueueReservation.status.in_(["active", "unactive", "หมดแล้ว"])
+
 
         ).first()
 
@@ -1484,7 +1484,7 @@ def cancel_reservation(
 
         # ✅ 1️⃣ ลบ parcel ที่อยู่ใน section นี้
         db.query(Parcel).filter(
-            Parcel.section_id == reservation.id,
+            Parcel.section_id == reservation.section_id,
             Parcel.carrier_id == carrier_id,
             Parcel.status == "กำลังรอ"
         ).delete(synchronize_session=False)
