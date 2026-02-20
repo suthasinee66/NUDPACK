@@ -1672,9 +1672,7 @@ def cancel_reservation(
 
         # 2️⃣ หา queue ล่าสุดที่เหลืออยู่ใน section นี้
         last_parcel = db.query(Parcel).filter(
-            Parcel.section_id == sid,
-            Parcel.carrier_id == carrier_id,
-            Parcel.date == today
+            Parcel.section_id == sid
         ).order_by(Parcel.queue_number.desc()).first()
 
         if last_parcel:
