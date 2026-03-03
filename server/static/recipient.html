@@ -436,8 +436,7 @@ hover:bg-red-100 active:scale-95 transition">
 
   </div>
 </div>
-
-  <!-- Success Popup -->
+<!-- Success Popup -->
 <div id="successPopup"
   class="fixed inset-0 hidden bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 px-4">
 
@@ -446,8 +445,8 @@ hover:bg-red-100 active:scale-95 transition">
     <!-- Icon -->
     <div class="pt-7 text-center">
       <div
-        class="mx-auto w-14 h-14 rounded-full bg-orange-50 flex items-center justify-center shadow-inner">
-        <span class="material-symbols-outlined text-orange-400 text-3xl">
+        class="mx-auto w-14 h-14 rounded-full bg-green-50 flex items-center justify-center shadow-inner">
+        <span class="material-symbols-outlined text-green-500 text-3xl">
           check_circle
         </span>
       </div>
@@ -455,18 +454,18 @@ hover:bg-red-100 active:scale-95 transition">
 
     <!-- Content -->
     <div class="px-5 pt-3 pb-2 text-center">
-      <h3 class="text-base font-semibold text-gray-800">
+      <h3 class="text-base font-semibold text-green-600">
         รับพัสดุเรียบร้อยแล้ว
       </h3>
 
       <div id="successInfo"
-        class="mt-1 text-xs text-gray-400"></div>
+        class="mt-2 text-xs text-gray-500"></div>
     </div>
 
     <!-- Action -->
     <div class="px-5 pb-6 pt-3">
       <button onclick="closeSuccessPopup()"
-        class="w-full rounded-xl bg-orange-400 py-2.5 text-white text-sm font-medium active:scale-95 transition">
+        class="w-full rounded-xl bg-green-500 hover:bg-green-600 py-2.5 text-white text-sm font-medium active:scale-95 transition">
         ตกลง
       </button>
     </div>
@@ -732,7 +731,7 @@ function confirmRecipientPickup(tracking, recipientName) {
   recipientField.addEventListener('input', updatePendingControls);
 
   updatePendingControls();
-  
+
   confirmBtn.addEventListener('click', async () => {
     const recipientToSend = recipientField.value.trim();
     await doConfirmPickup(pendingVerification.tracking, recipientToSend);
