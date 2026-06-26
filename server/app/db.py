@@ -43,7 +43,7 @@ def init_db():
     # 🔥 seed QueueSection ครั้งแรก
     if db.query(QueueSection).count() == 0:
         start = 1
-        for i in range(20):
+        for i in range(30):
             end = start + 49
             db.add(QueueSection(
                 start_seq=start,
