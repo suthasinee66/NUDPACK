@@ -242,19 +242,13 @@ hover:bg-red-100 active:scale-95 transition">
 
         <!-- search button -->
         <div class="relative inline-block">
-    <button
-        type="button"
-        onclick="openCalendar()"
-        class="bg-orange-500 text-white px-4 py-2 rounded-xl">
-        ค้นหา
-    </button>
+          <button type="button" onclick="openCalendar()" class="bg-orange-500 text-white px-4 py-2 rounded-xl">
+            ค้นหา
+          </button>
 
-    <input
-        id="dateFilter"
-        type="date"
-        class="absolute inset-0 opacity-0 w-full h-full"
-        onchange="loadWaitingParcels()">
-</div>
+          <input id="dateFilter" type="date" class="absolute inset-0 opacity-0 w-full h-full"
+            onchange="loadWaitingParcels()">
+        </div>
 
 
     </section>
@@ -572,7 +566,7 @@ hover:bg-red-100 active:scale-95 transition">
 
       </div>
     </div>
-
+   
 
   </main>
   <!-- ================= Stranded Page ================= -->
@@ -664,6 +658,17 @@ hover:bg-red-100 active:scale-95 transition">
   </div>
   <!-- ================= /Stranded Page ================= -->
 
+  <div id="toast"
+class="fixed bottom-6 left-1/2 -translate-x-1/2
+bg-green-600 text-white px-5 py-3 rounded-xl
+shadow-lg hidden z-[99999]
+items-center gap-2">
+
+<span>✓</span>
+
+<span id="toastText"></span>
+
+</div>
   <!-- ================= Hold List Page ================= -->
   <div id="holdListPage" class="fixed inset-0 bg-[#fafafa] hidden overflow-y-auto z-50">
 
@@ -824,6 +829,34 @@ hover:bg-red-100 active:scale-95 transition">
 
     </div>
   </div>
+   <!-- Section Action Modal -->
+<div id="sectionModal"
+  class="fixed inset-0 hidden bg-black/40 z-[9999] flex items-center justify-center">
+
+  <div class="bg-white rounded-2xl p-5 w-80 shadow-xl">
+
+    <div class="flex justify-between items-center mb-4">
+      <h3 class="font-semibold text-slate-800">
+        Section <span id="sectionModalLabel"></span>
+      </h3>
+
+      <button onclick="closeSectionModal()">
+        ✕
+      </button>
+    </div>
+
+    <button
+      onclick="unlockBasket()"
+      class="w-full bg-red-500 hover:bg-red-600
+      text-white rounded-xl py-3">
+
+      🔓 ปลดลอคตระกร้า
+
+    </button>
+
+  </div>
+
+</div>
   <!-- ================= /Dashboard Page ================= -->
 
   <div id="reportPage" class="fixed inset-0 bg-[#fafafa] hidden overflow-y-auto z-50">
@@ -1997,7 +2030,7 @@ hover:bg-red-100 active:scale-95 transition">
         }
 
         /* ---------- export ---------- */
-        function exportReport(fmt = "csv") {
+        async function exportReport(fmt = "csv") {
 
           const start = unslash(document.getElementById("r_start").value);
           const end = unslash(document.getElementById("r_end").value);
@@ -2014,7 +2047,33 @@ hover:bg-red-100 active:scale-95 transition">
             fmt: fmt
           });
 
-          window.location = `/api/reports/export?${qs.toString()}`;
+          // ใช้ fetch + Blob แทน window.location เพื่อ:
+          // 1) ส่ง session cookie ไปด้วย (credentials: include)
+          // 2) URL แบบ absolute (ขึ้นต้นด้วย /) ทำงานถูกต้องเสมอ ไม่ว่า app จะอยู่ใต้ subprefix ใด
+          try {
+            const res = await fetch(`/api/reports/export?${qs.toString()}`, {
+              credentials: "include"
+            });
+            if (!res.ok) {
+              const errText = await res.text().catch(() => res.statusText);
+              alert(`Export ล้มเหลว (${res.status}): ${errText}`);
+              return;
+            }
+            const blob = await res.blob();
+            const disposition = res.headers.get("Content-Disposition") || "";
+            let filename = fmt === "xlsx" ? "report.xlsx" : "report.csv";
+            const m = disposition.match(/filename\*?=(?:UTF-8'')?([^;\r\n]+)/i);
+            if (m) filename = decodeURIComponent(m[1].replace(/"/g, ""));
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+          } catch (err) {
+            alert("Export ล้มเหลว: " + err.message);
+          }
         }
         /* ---------- Utilities ---------- */
         function setStatus(s) { try { document.getElementById('scanStatus').innerText = s; } catch (e) { } }
@@ -2572,12 +2631,28 @@ ${recipientHtml}
                 }
                 const label = s.name;  // e.g. "1–50"
                 const sNum = i + 1;   // S1…S20
-                return `
-                  <div title="Section ${sNum}: ${s.used}/${s.total} (${pct}%)" style="background:${bg};border:1px solid ${border};" class="rounded-lg p-1.5 flex flex-col items-center justify-center gap-0.5 cursor-default select-none">
-                    <span style="color:${fg};" class="text-[9px] font-semibold leading-none opacity-70">S${sNum}</span>
-                    <span style="color:${fg};" class="text-[13px] font-bold leading-none">${pct}%</span>
-                    <span style="color:${fg};" class="text-[8px] leading-none opacity-60">${s.used}/${s.total}</span>
-                  </div>`;
+                console.log("SECTION =", s);
+return `
+<div
+    onclick="openSectionModal(${s.id}, '${label}')"
+    title="Section ${label}"
+    style="background:${bg};border:1px solid ${border};"
+    class="rounded-lg p-1.5 flex flex-col items-center justify-center gap-0.5 cursor-pointer hover:scale-105 active:scale-95 transition">
+
+    <span style="color:${fg};" class="text-[9px] font-semibold leading-none opacity-70">
+        ${label}
+    </span>
+
+    <span style="color:${fg};" class="text-[13px] font-bold leading-none">
+        ${pct}%
+    </span>
+
+    <span style="color:${fg};" class="text-[8px] leading-none opacity-60">
+        ${s.used}/${s.total}
+    </span>
+
+</div>
+`;
               }).join("");
             }
 
@@ -2700,8 +2775,33 @@ ${recipientHtml}
           adminPage.classList.remove("hidden");
         }
 
-        function exportStrandedParcels() {
-          window.location.href = `/api/reports/stranded/export?days=${currentStrandedDays}`;
+        async function exportStrandedParcels() {
+          // ใช้ fetch + Blob แทน window.location เพื่อส่ง session cookie และรองรับ subprefix
+          // (ใช้ absolute path ขึ้นต้นด้วย / เพื่อให้ resolve ถูกต้องเสมอ)
+          try {
+            const res = await fetch(`/api/reports/stranded/export?days=${currentStrandedDays}`, {
+              credentials: "include"
+            });
+            if (!res.ok) {
+              const errText = await res.text().catch(() => res.statusText);
+              alert(`Export ล้มเหลว (${res.status}): ${errText}`);
+              return;
+            }
+            const blob = await res.blob();
+            const disposition = res.headers.get("Content-Disposition") || "";
+            let filename = "stranded_parcels.xlsx";
+            const m = disposition.match(/filename\*?=(?:UTF-8'')?([^;\r\n]+)/i);
+            if (m) filename = decodeURIComponent(m[1].replace(/"/g, ""));
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+          } catch (err) {
+            alert("Export ล้มเหลว: " + err.message);
+          }
         }
 
         function onStrandedSelectChange() {
@@ -2922,8 +3022,7 @@ ${recipientHtml}
             menu.classList.add('hidden');
           }
         });
-
-        function setDefaultToday() {
+function setDefaultToday() {
 
     const now = new Date();
     const thai = new Date(
@@ -2947,18 +3046,18 @@ ${recipientHtml}
 }
 
         function openCalendar() {
-    const input = document.getElementById("dateFilter");
+          const input = document.getElementById("dateFilter");
 
-    input.value = "";
+          input.value = "";
 
-    input.focus();
+          input.focus();
 
-    if (input.showPicker) {
-        input.showPicker();
-    } else {
-        input.click();
-    }
-}
+          if (input.showPicker) {
+            input.showPicker();
+          } else {
+            input.click();
+          }
+        }
 
         function toggleMoreMenu() {
           document.getElementById("moreMenu").classList.toggle("hidden");
@@ -3031,6 +3130,87 @@ ${recipientHtml}
 
           }
         }
+        let selectedSectionId = null;
+
+function openSectionModal(sectionId, label) {
+  selectedSectionId = sectionId;
+
+  document.getElementById("sectionModalLabel").textContent = label;
+
+  document
+    .getElementById("sectionModal")
+    .classList.remove("hidden");
+}
+
+function closeSectionModal() {
+  selectedSectionId = null;
+
+  document
+    .getElementById("sectionModal")
+    .classList.add("hidden");
+}
+
+async function unlockBasket() {
+
+  console.log("selectedSectionId =", selectedSectionId);
+
+  if (!selectedSectionId) {
+    alert("ไม่พบ section");
+    return;
+  }
+
+  try {
+
+    const res = await fetch(
+      "/api/queue_reservations/unlock",
+      {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          section_id: selectedSectionId
+        })
+      }
+    );
+
+    const data = await res.json();
+
+    console.log(data);
+
+    if (!res.ok) {
+      showToast(data.detail || "เกิดข้อผิดพลาด");
+      return;
+    }
+
+    showToast(data.message || "ปลดลอคตระกร้าสำเร็จ");
+
+    closeSectionModal();
+
+    loadDashboard();
+
+  } catch (e) {
+
+    console.error(e);
+
+    alert("เรียก API ไม่สำเร็จ");
+  }
+}
+function openSectionModal(sectionId, label) {
+
+  console.log("CLICK SECTION =", sectionId);
+
+  selectedSectionId = sectionId;
+
+  document.getElementById(
+    "sectionModalLabel"
+  ).textContent = label;
+
+  document
+    .getElementById("sectionModal")
+    .classList.remove("hidden");
+}
       </script>
 
       <!-- ============================================================
@@ -3344,6 +3524,28 @@ ${recipientHtml}
             alert("เกิดข้อผิดพลาด: " + err.message);
           }
         }
+        function showToast(message) {
+
+    const toast =
+        document.getElementById("toast");
+
+    const text =
+        document.getElementById("toastText");
+
+    text.textContent = message;
+
+    toast.classList.remove("hidden");
+
+    toast.classList.add("flex");
+
+    setTimeout(() => {
+
+        toast.classList.add("hidden");
+
+        toast.classList.remove("flex");
+
+    }, 2500);
+}
       </script>
 
       <script>
@@ -3358,6 +3560,7 @@ ${recipientHtml}
         function openAuditLogPage() {
           window.location.href = "/audit";
         }
+        
       </script>
 
 </body>
