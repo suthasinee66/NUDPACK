@@ -129,6 +129,20 @@ hover:bg-red-100 active:scale-95 transition">
             <!-- เส้นคั่น -->
             <div class="h-px bg-gray-100 my-1"></div>
 
+            <!-- Dashboard -->
+            <button onclick="openDashboardPage()" class="flex items-center gap-3 w-full
+           px-4 py-3 text-sm font-medium text-gray-700
+           hover:bg-orange-50 hover:text-orange-600
+           transition duration-150">
+              <span class="material-symbols-outlined text-[18px]">
+                dashboard
+              </span>
+              ภาพรวมระบบ
+            </button>
+
+            <!-- เส้นคั่น -->
+            <div class="h-px bg-gray-100 my-1"></div>
+
             <!-- Audit Log -->
             <button onclick="openAuditLogPage()" class="flex items-center gap-3 w-full
            px-4 py-3 text-sm font-medium text-gray-700
@@ -138,6 +152,20 @@ hover:bg-red-100 active:scale-95 transition">
                 history
               </span>
               Audit Log
+            </button>
+
+            <!-- เส้นคั่น -->
+            <div class="h-px bg-gray-100 my-1"></div>
+
+            <!-- พัสดุตกค้าง -->
+            <button onclick="openStrandedPage()" class="flex items-center gap-3 w-full
+           px-4 py-3 text-sm font-medium text-gray-700
+           hover:bg-orange-50 hover:text-orange-600
+           transition duration-150">
+              <span class="material-symbols-outlined text-[18px]">
+                inventory_2
+              </span>
+              พัสดุตกค้าง
             </button>
           </div>
 
@@ -205,27 +233,28 @@ hover:bg-red-100 active:scale-95 transition">
       <div class="flex gap-2 items-center flex-wrap">
 
         <!-- queue search -->
-        <input id="queueSearch"
-       placeholder="ค้นหาเลขคิว"
-       class="border px-3 py-2 rounded-xl text-sm w-24">
+        <input id="queueSearch" placeholder="ค้นหาเลขคิว" class="border px-3 py-2 rounded-xl text-sm w-24"
+          onkeydown="if(event.key === 'Enter') loadWaitingParcels()">
 
         <!-- recipient search -->
-        <input id="recipientSearch"
-       placeholder="ค้นหาชื่อหน้ากล่อง"
-       class="border px-3 py-2 rounded-xl text-sm w-32">
-        
+        <input id="recipientSearch" placeholder="ค้นหาชื่อหน้ากล่อง" class="border px-3 py-2 rounded-xl text-sm w-32"
+          onkeydown="if(event.key === 'Enter') loadWaitingParcels()">
+
         <!-- search button -->
-        <input id="dateFilter"
-       type="date"
-       class="hidden">
-
-<button type="button"
+        <div class="relative inline-block">
+    <button
+        type="button"
         onclick="openCalendar()"
-        class="bg-orange-500 hover:bg-orange-600 transition text-white px-4 py-2 rounded-xl text-sm shadow">
-    ค้นหา
-</button>
+        class="bg-orange-500 text-white px-4 py-2 rounded-xl">
+        ค้นหา
+    </button>
 
-      </div>
+    <input
+        id="dateFilter"
+        type="date"
+        class="absolute inset-0 opacity-0 w-full h-full"
+        onchange="loadWaitingParcels()">
+</div>
 
 
     </section>
@@ -509,8 +538,8 @@ hover:bg-red-100 active:scale-95 transition">
         <div class="pt-6 text-center">
           <div class="mx-auto w-14 h-14 rounded-full bg-red-50 flex items-center justify-center">
             <span class="material-symbols-outlined text-red-500 text-3xl">
-  error
-</span>
+              error
+            </span>
           </div>
         </div>
 
@@ -546,6 +575,257 @@ hover:bg-red-100 active:scale-95 transition">
 
 
   </main>
+  <!-- ================= Stranded Page ================= -->
+  <div id="strandedPage" class="fixed inset-0 bg-[#fafafa] hidden overflow-y-auto z-50">
+
+    <header class="sticky top-0 bg-white border-b p-4 z-30">
+      <div class="max-w-xl mx-auto flex flex-col gap-3">
+        <!-- Top Row -->
+        <div class="relative flex items-center">
+          <button onclick="closeStrandedPage()" class="size-9 rounded-full bg-slate-100
+               flex items-center justify-center
+               hover:bg-slate-200 transition">
+            <span class="material-symbols-outlined text-slate-700">arrow_back</span>
+          </button>
+          <h1 class="absolute left-1/2 -translate-x-1/2 text-base font-semibold text-slate-800">
+            พัสดุตกค้าง
+          </h1>
+        </div>
+        <!-- Bottom Row (Buttons) -->
+        <div class="flex items-center gap-2 justify-end">
+          <!-- Add to Hold List button -->
+          <button id="addToHoldBtn" onclick="addStrandedToHold()" hidden class="flex items-center gap-1 bg-amber-500 hover:bg-amber-600
+                         active:scale-95 transition text-white text-xs font-medium
+                         px-3 py-2 rounded-xl shadow">
+            <span class="material-symbols-outlined text-[16px]">inventory</span>
+            เพิ่มเข้า Hold List
+          </button>
+          <!-- Export button -->
+          <button onclick="exportStrandedParcels()" class="flex items-center gap-1 bg-orange-500 hover:bg-orange-600
+                   active:scale-95 transition text-white text-sm font-medium
+                   px-3 py-2 rounded-xl shadow">
+            <span class="material-symbols-outlined text-[18px]">download</span>
+            Excel
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <div class="max-w-xl mx-auto p-4">
+
+      <!-- Filter -->
+      <div class="flex gap-2 mb-4 items-center">
+        <select id="strandedDaysSelect" onchange="onStrandedSelectChange()" class="appearance-none rounded-xl border border-gray-300 bg-white
+                 px-4 py-2 text-sm font-medium text-gray-700
+                 shadow-sm transition
+                 hover:border-orange-300
+                 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-orange-400">
+          <option value="1">1 วัน</option>
+          <option value="30" selected>30 วัน</option>
+          <option value="60">60 วัน</option>
+          <option value="180">180 วัน</option>
+          <option value="custom">กำหนดเอง...</option>
+        </select>
+
+        <!-- Custom days input (hidden by default) -->
+        <div id="strandedCustomWrap" class="hidden flex items-center gap-2">
+          <input id="strandedCustomDays" type="number" min="1" placeholder="ระบุวัน" class="border rounded-xl px-3 py-2 text-sm w-24
+                   focus:ring-2 focus:ring-orange-400 focus:outline-none" />
+          <button onclick="applyCustomStrandedDays()" class="bg-orange-500 hover:bg-orange-600 text-white text-sm px-3 py-2 rounded-xl shadow
+                   active:scale-95 transition">
+            ค้นหา
+          </button>
+        </div>
+
+        <button onclick="openHoldListPage()"
+          class="ml-auto flex items-center gap-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 text-sm px-3 py-2 rounded-xl shadow-sm active:scale-95 transition font-medium">
+          <span class="material-symbols-outlined text-[18px]">inventory</span>
+          ดู Hold List
+        </button>
+      </div>
+
+      <!-- Summary card -->
+      <div id="strandedSummary" class="mb-4"></div>
+
+      <!-- Select-all checkbox row (shown after load) -->
+      <div id="strandedSelectBar" class="hidden flex items-center gap-2 mb-3">
+        <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+          <input type="checkbox" id="strandedSelectAll" onchange="toggleSelectAllStranded(this.checked)"
+            class="w-4 h-4 accent-amber-500 rounded">
+          เลือกทั้งหมด
+        </label>
+        <span id="strandedSelectedCount" class="text-xs text-amber-600 font-medium"></span>
+      </div>
+
+      <!-- List grouped by date -->
+      <div id="strandedList"></div>
+
+    </div>
+  </div>
+  <!-- ================= /Stranded Page ================= -->
+
+  <!-- ================= Hold List Page ================= -->
+  <div id="holdListPage" class="fixed inset-0 bg-[#fafafa] hidden overflow-y-auto z-50">
+
+    <header class="sticky top-0 bg-white border-b p-4 z-30">
+      <div class="max-w-xl mx-auto relative flex items-center">
+        <button onclick="closeHoldListPage()" class="size-9 rounded-full bg-slate-100
+             flex items-center justify-center
+             hover:bg-slate-200 transition">
+          <span class="material-symbols-outlined text-slate-700">arrow_back</span>
+        </button>
+        <h1 class="absolute left-1/2 -translate-x-1/2 text-base font-semibold text-slate-800">
+          Hold List
+        </h1>
+        <button onclick="refreshHoldList()" class="ml-auto size-9 rounded-full bg-slate-100
+                 flex items-center justify-center hover:bg-slate-200 transition">
+          <span class="material-symbols-outlined text-slate-600 text-[18px]">refresh</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="max-w-xl mx-auto p-4">
+
+      <!-- Summary card -->
+      <div id="holdSummary" class="mb-4"></div>
+
+      <!-- Select-all checkbox row (shown after load) -->
+      <div id="holdSelectBar" class="hidden flex items-center gap-2 mb-3">
+        <label class="flex items-center gap-2 cursor-pointer bg-white px-3 py-2 rounded-lg border shadow-sm w-full">
+          <input type="checkbox" id="holdSelectAll" class="w-4 h-4 accent-amber-500 rounded"
+            onchange="toggleSelectAllHold(this.checked)">
+          <span class="text-sm font-medium text-gray-700">เลือกทั้งหมด</span>
+          <span id="holdSelectedCount" class="text-xs text-amber-600 ml-auto"></span>
+        </label>
+      </div>
+
+      <!-- Action buttons -->
+      <div id="holdActionBar" class="hidden flex gap-2 mb-4">
+        <!-- Unhold button -->
+        <button onclick="unmarkHoldParcels()" class="flex items-center gap-2 flex-1 justify-center
+                 bg-gray-100 hover:bg-gray-200 text-gray-700 active:scale-95 transition
+                 border border-gray-300 text-sm font-medium px-4 py-3 rounded-xl shadow-sm">
+          <span class="material-symbols-outlined text-[18px]">undo</span>
+          นำออกจาก Hold
+        </button>
+        <!-- Delete unreceived button -->
+        <button onclick="deleteUnreceivedHold()" class="flex items-center gap-2 flex-1 justify-center
+                 bg-red-500 hover:bg-red-600 active:scale-95 transition
+                 text-white text-sm font-medium px-4 py-3 rounded-xl shadow">
+          <span class="material-symbols-outlined text-[18px]">delete_sweep</span>
+          ลบที่ยังไม่รับ
+        </button>
+      </div>
+
+      <!-- List -->
+      <div id="holdList"></div>
+
+    </div>
+  </div>
+  <!-- ================= /Hold List Page ================= -->
+
+  <!-- ================= Dashboard Page ================= -->
+  <div id="dashboardPage" class="fixed inset-0 bg-[#fafafa] hidden overflow-y-auto z-50">
+
+    <!-- Header -->
+    <header class="sticky top-0 bg-white border-b p-4 z-30">
+      <div class="max-w-xl mx-auto relative flex items-center">
+        <button onclick="closeDashboardPage()" class="size-9 rounded-full bg-slate-100
+             flex items-center justify-center hover:bg-slate-200 transition">
+          <span class="material-symbols-outlined text-slate-700">arrow_back</span>
+        </button>
+        <h1 class="absolute left-1/2 -translate-x-1/2 text-base font-semibold text-slate-800">
+          ภาพรวมระบบ
+        </h1>
+        <button onclick="loadDashboard()" id="dashRefreshBtn" class="ml-auto size-9 rounded-full bg-slate-100
+                 flex items-center justify-center hover:bg-slate-200 transition">
+          <span class="material-symbols-outlined text-slate-600 text-[18px]">refresh</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="max-w-xl mx-auto p-4 flex flex-col gap-6">
+
+      <!-- ① KPI วันนี้ -->
+      <div>
+        <p class="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-2">วันนี้</p>
+        <div class="flex gap-2">
+          <div class="flex-1 bg-white border border-gray-100 rounded-xl p-3 shadow-sm min-w-0">
+            <div id="db-kpi-wait" class="text-2xl font-semibold text-primary truncate">—</div>
+            <div class="text-xs text-gray-500 mt-0.5 whitespace-nowrap">รอรับ</div>
+          </div>
+          <div class="flex-1 bg-white border border-gray-100 rounded-xl p-3 shadow-sm min-w-0">
+            <div id="db-kpi-in" class="text-2xl font-semibold text-slate-700 truncate">—</div>
+            <div class="text-xs text-gray-500 mt-0.5 whitespace-nowrap">เข้าทั้งหมด</div>
+          </div>
+          <div class="flex-1 bg-white border border-gray-100 rounded-xl p-3 shadow-sm min-w-0">
+            <div id="db-kpi-out" class="text-2xl font-semibold text-slate-700 truncate">—</div>
+            <div class="text-xs text-gray-500 mt-0.5 whitespace-nowrap">รับออกแล้ว</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ② แยกตามสถานะ -->
+      <div>
+        <p class="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-2">แยกตามสถานะ</p>
+        <div class="bg-white border border-gray-100 rounded-xl shadow-sm divide-y divide-gray-50">
+          <div class="flex items-center justify-between px-4 py-3">
+            <span class="flex items-center gap-2 text-sm text-gray-600">
+              <span class="w-2 h-2 rounded-full bg-gray-400 inline-block"></span>กำลังรอ
+            </span>
+            <span id="db-s-pending" class="text-sm font-semibold text-slate-700">—</span>
+          </div>
+          <div class="flex items-center justify-between px-4 py-3">
+            <span class="flex items-center gap-2 text-sm text-gray-600">
+              <span class="w-2 h-2 rounded-full bg-orange-500 inline-block"></span>ยังไม่ได้รับ
+            </span>
+            <span id="db-s-waiting" class="text-sm font-semibold text-slate-700">—</span>
+          </div>
+          <div class="flex items-center justify-between px-4 py-3">
+            <span class="flex items-center gap-2 text-sm text-gray-600">
+              <span class="w-2 h-2 rounded-full bg-green-500 inline-block"></span>ได้รับแล้ว
+            </span>
+            <span id="db-s-done" class="text-sm font-semibold text-slate-700">—</span>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- ④ Section utilization -->
+      <div>
+        <p class="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-2">Section utilization</p>
+        <div id="db-sections" class="grid grid-cols-5 gap-1.5">
+          <span class="text-xs text-gray-400 col-span-5">กำลังโหลด...</span>
+        </div>
+        <div class="flex gap-4 mt-2">
+          <span class="flex items-center gap-1 text-[10px] text-gray-400">
+            <span class="w-2 h-2 rounded-sm bg-green-200 inline-block"></span>ปกติ &lt;75%
+          </span>
+          <span class="flex items-center gap-1 text-[10px] text-gray-400">
+            <span class="w-2 h-2 rounded-sm bg-yellow-300 inline-block"></span>ใกล้เต็ม 75–99%
+          </span>
+          <span class="flex items-center gap-1 text-[10px] text-gray-400">
+            <span class="w-2 h-2 rounded-sm bg-red-400 inline-block"></span>เต็ม ≥100%
+          </span>
+        </div>
+      </div>
+
+      <!-- ⑤ Alerts (แจ้งเตือน) -->
+      <div>
+        <p class="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-2">แจ้งเตือน</p>
+        <div id="db-alerts-container" class="flex flex-col gap-3">
+          <!-- Dynamic Alerts go here -->
+          <div class="text-xs text-gray-400 text-center py-2">กำลังโหลด...</div>
+        </div>
+      </div>
+
+      <!-- timestamp -->
+      <p id="db-updated" class="text-center text-[11px] text-gray-300 pb-2"></p>
+
+    </div>
+  </div>
+  <!-- ================= /Dashboard Page ================= -->
+
   <div id="reportPage" class="fixed inset-0 bg-[#fafafa] hidden overflow-y-auto z-50">
 
     <header class="sticky top-0 bg-white border-b p-4 z-30">
@@ -595,9 +875,40 @@ hover:bg-red-100 active:scale-95 transition">
 
       </div>
 
-      <div id="summary" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6"></div>
+      <div id="summary" class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-6"> </div>
 
-      <canvas id="summaryChart" height="160"></canvas>
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mb-6">
+        <div class="flex items-center justify-between mb-4">
+          <h3 id="summaryChartTitle" class="font-semibold text-slate-700 text-sm">
+            สถิติพัสดุเข้า-ออก (วันนี้ รายชั่วโมง)
+          </h3>
+          <select id="chartModeSelect" onchange="onChartModeChange()" class="appearance-none rounded-xl border border-gray-200 bg-white
+                   px-3 py-1.5 text-xs font-medium text-gray-600 min-w-[140px]
+                   shadow-sm transition hover:border-orange-300
+                   focus:outline-none focus:ring-2 focus:ring-orange-400">
+            <option value="today" selected>วันนี้ (รายชั่วโมง)</option>
+            <option value="week">สัปดาห์นี้</option>
+            <option value="custom">ตามช่วงที่เลือก</option>
+          </select>
+        </div>
+        <canvas id="summaryChart" height="100"></canvas>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mb-6">
+        <h3 class="font-semibold text-slate-700 mb-4 text-sm">เปรียบเทียบพัสดุเข้า-รับออก (Grouped Bar)</h3>
+        <canvas id="groupedBarChart" height="100"></canvas>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+          <h3 class="font-semibold text-slate-700 mb-4 text-sm">สัดส่วนพัสดุแยกตามขนส่ง</h3>
+          <div class="relative h-[250px]"><canvas id="doughnutChart"></canvas></div>
+        </div>
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
+          <h3 class="font-semibold text-slate-700 mb-4 text-sm">ช่วงเวลาเร่งด่วน (Peak Hours)</h3>
+          <div class="relative h-[250px]"><canvas id="peakHoursChart"></canvas></div>
+        </div>
+      </div>
 
       <div class="flex gap-2 my-3">
         <button onclick="toggleReportEdit()" class="bg-orange-500 text-white text-xs px-3 py-2 rounded-lg shadow
@@ -778,7 +1089,7 @@ hover:bg-red-100 active:scale-95 transition">
                 return;
               }
               const info = await res.json();
-              // ถ้าได้รับแล้ว → popup แจ้ง
+              // ถ้าได้รับแล้ว  popup แจ้ง
               if (info.status === "PICKED_UP" || info.status === "ได้รับแล้ว") {
 
                 // ==================================
@@ -786,7 +1097,7 @@ hover:bg-red-100 active:scale-95 transition">
                 // ==================================
                 if (!info.admin_staff_name) {
 
-                  // 🔥 ยันทันที
+                  // ยันทันที
                   fetch(`/api/parcels/${encodeURIComponent(info.tracking)}/confirm_pickup`, {
                     method: "POST",
                     credentials: "include",
@@ -797,7 +1108,7 @@ hover:bg-red-100 active:scale-95 transition">
                     })
                   })
 
-                  // ✅ แจ้งผล
+                  // แจ้งผล
                   document.getElementById("alreadyBox").innerHTML = `
   <div class="rounded-3xl bg-gradient-to-b from-emerald-50 to-white p-5 text-center shadow-md space-y-3">
 
@@ -866,12 +1177,12 @@ hover:bg-red-100 active:scale-95 transition">
                         <div class="text-gray-400">เวลาได้รับ</div>
                         <div class="text-[11px]">
                           ${escapeHtml(
-                                    info.picked_up_at
-                                      ? new Date(info.picked_up_at).toLocaleString("th-TH", {
-                                        timeZone: "Asia/Bangkok",
-                                      })
-                                      : "-"
-                                  )}
+                  info.picked_up_at
+                    ? new Date(info.picked_up_at).toLocaleString("th-TH", {
+                      timeZone: "Asia/Bangkok",
+                    })
+                    : "-"
+                )}
                         </div>
                       </div>
                     </div>
@@ -1071,7 +1382,10 @@ hover:bg-red-100 active:scale-95 transition">
         }
 
         /* ---------- Search ---------- */
-        document.getElementById('searchInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') doSearch(); });
+        const _searchInputEl = document.getElementById('searchInput');
+        if (_searchInputEl) {
+          _searchInputEl.addEventListener('keypress', (e) => { if (e.key === 'Enter') doSearch(); });
+        }
         async function doSearch() {
           const q = document.getElementById('searchInput').value.trim();
           if (!q) return alert('Please input tracking or queue');
@@ -1191,17 +1505,19 @@ hover:bg-red-100 active:scale-95 transition">
           e.selectedIndex = arr.length - 1;
         }
 
-        document.getElementById('r_period')
-          .addEventListener('change', async () => {
+        const _rPeriodEl = document.getElementById('r_period');
+        if (_rPeriodEl) {
+          _rPeriodEl.addEventListener('change', async () => {
             await loadReportValues();
 
             // เลือกเดือนแรกอัตโนมัติ
             const sel = document.getElementById('r_periodValues');
-            if (sel.options.length > 0) sel.selectedIndex = 0;
+            if (sel && sel.options.length > 0) sel.selectedIndex = 0;
 
             // โหลด report ทันที
             loadReport();
           });
+        }
 
         /* ---------- load report ---------- */
         function compact(d) {
@@ -1233,57 +1549,57 @@ hover:bg-red-100 active:scale-95 transition">
           currentReportData = sdata.items || [];
           renderReportTable(currentReportData);
 
+          const ares = await fetch(
+            `/api/reports/advanced_charts?period=daily&start=${start}&end=${end}`,
+            { credentials: "include" }
+          );
+          const adata = await ares.json();
+
+          let rate = 0;
+          if (sdata.checkin > 0) rate = Math.round((sdata.checkout / sdata.checkin) * 100);
+          let rateColor = rate >= 80 ? 'text-emerald-500' : (rate >= 50 ? 'text-orange-500' : 'text-red-500');
+          let rateHex = rate >= 80 ? '#10b981' : (rate >= 50 ? '#f97316' : '#ef4444');
+
           document.getElementById('summary').innerHTML = `
-  <div class="bg-white rounded-xl shadow-sm border border-slate-100
-              flex divide-x divide-slate-100 overflow-hidden">
-
     <!-- Check-in -->
-    <div class="flex-1 px-5 py-4">
-      <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-        พัสดุเข้า
-      </p>
+    <div class="bg-white rounded-xl shadow-sm border border-slate-100 px-3 py-3">
+      <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">พัสดุเข้า</p>
       <div class="flex items-center gap-2 mt-1">
-        <span class="material-symbols-outlined text-emerald-500 text-xl">
-          move_to_inbox
-        </span>
-        <span class="text-2xl font-bold text-slate-900">
-          ${sdata.checkin}
-        </span>
+        <span class="material-symbols-outlined text-emerald-500 text-lg">move_to_inbox</span>
+        <span class="text-xl font-bold text-slate-900">${sdata.checkin}</span>
       </div>
     </div>
-
     <!-- Check-out -->
-    <div class="flex-1 px-5 py-4">
-      <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-        พัสดุออก
-      </p>
+    <div class="bg-white rounded-xl shadow-sm border border-slate-100 px-3 py-3">
+      <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">พัสดุออก</p>
       <div class="flex items-center gap-2 mt-1">
-        <span class="material-symbols-outlined text-orange-500 text-xl">
-          outbox
-        </span>
-        <span class="text-2xl font-bold text-slate-900">
-          ${sdata.checkout}
-        </span>
+        <span class="material-symbols-outlined text-orange-500 text-lg">outbox</span>
+        <span class="text-xl font-bold text-slate-900">${sdata.checkout}</span>
       </div>
     </div>
-
     <!-- Remaining -->
-    <div class="flex-1 px-5 py-4">
-      <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-        คงเหลือ
-      </p>
+    <div class="bg-white rounded-xl shadow-sm border border-slate-100 px-3 py-3">
+      <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">คงเหลือ</p>
       <div class="flex items-center gap-2 mt-1">
-        <span class="material-symbols-outlined text-blue-500 text-xl">
-          inventory_2
-        </span>
-        <span class="text-2xl font-bold text-slate-900">
-          ${sdata.remaining}
-        </span>
+        <span class="material-symbols-outlined text-blue-500 text-lg">inventory_2</span>
+        <span class="text-xl font-bold text-slate-900">${sdata.remaining}</span>
       </div>
     </div>
-
-  </div>
-`
+    <!-- Gauge (Remaining Rate) -->
+    <div class="bg-white rounded-xl shadow-sm border border-slate-100 px-3 py-3 flex flex-col justify-between">
+      <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">อัตราการระบายของ</p>
+      <div class="flex items-center justify-between mt-1">
+        <div class="flex items-center gap-1.5">
+          <span class="material-symbols-outlined ${rateColor} text-lg">speed</span>
+          <span class="text-xl font-bold text-slate-900">${rate}%</span>
+        </div>
+        <div class="w-8 h-8 rounded-full flex items-center justify-center text-[9px] font-bold" 
+             style="background: conic-gradient(${rateHex} ${rate}%, #f1f5f9 0);">
+             <div class="w-5 h-5 bg-white rounded-full flex items-center justify-center"></div>
+        </div>
+      </div>
+    </div>
+`;
 
           const tres = await fetch(
             `/api/reports/timeseries?period=daily&start=${start}&end=${end}`,
@@ -1292,7 +1608,8 @@ hover:bg-red-100 active:scale-95 transition">
 
           const tdata = await tres.json();
 
-          renderChart(tdata.labels, tdata.checkin, tdata.checkout, 'daily');
+          await loadSummaryChart();
+          await renderAdvancedCharts(tdata.labels, tdata.checkin, tdata.checkout, adata, start, end);
         }
 
         /* ---------- table ---------- */
@@ -1368,10 +1685,10 @@ hover:bg-red-100 active:scale-95 transition">
           const removeBtn = document.getElementById('removeBtn');
 
           if (reportEditMode) {
-            removeBtn.hidden = false;   // 👉 เข้าโหมดแก้ไข = โชว์
+            removeBtn.hidden = false;   // เข้าโหมดแก้ไข = โชว์
             removeBtn.disabled = true; // ยังเลือกไม่ได้
           } else {
-            removeBtn.hidden = true;    // 👉 ออกโหมดแก้ไข = ซ่อน
+            removeBtn.hidden = true;    // ออกโหมดแก้ไข = ซ่อน
             removeBtn.disabled = true;
           }
 
@@ -1413,24 +1730,36 @@ hover:bg-red-100 active:scale-95 transition">
         }
 
         /* ---------- chart ---------- */
+        let groupedChartInst = null;
+        let doughnutChartInst = null;
+        let peakChartInst = null;
+        Chart.defaults.font.family = "'Noto Sans Thai Looped', sans-serif";
+
         function renderChart(labels, checkin, checkout, period) {
           const formattedLabels = labels.map(l => {
-            if (period === 'daily' && l.length === 8) return `${l.slice(0, 4)}-${l.slice(4, 6)}-${l.slice(6)}`;
-            if (period === 'monthly' && l.length === 6) return `${l.slice(0, 4)}-${l.slice(4, 6)}`;
+            if (period === 'hourly') return l;
+            if (period === 'daily' && l.length === 8) return `${l.slice(6, 8)}/${l.slice(4, 6)}/${l.slice(0, 4)}`;
+            if (period === 'weekly' && l.includes('-W')) {
+              const [y, w] = l.split('-W');
+              return `สัปดาห์ที่ ${w}/${y}`;
+            }
+            if (period === 'dayofweek') {
+              const days = ['จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์', 'อาทิตย์'];
+              return days[parseInt(l)] || l;
+            }
+            if (period === 'monthly' && l.length === 6) return `${l.slice(4, 6)}/${l.slice(0, 4)}`;
             return l;
           });
 
           const ctx = document.getElementById('summaryChart').getContext('2d');
           if (chartInst) chartInst.destroy();
-          // gradient เขียว
-          const greenGrad = ctx.createLinearGradient(0, 0, 0, 180)
-          greenGrad.addColorStop(0, 'rgba(34,197,94,0.25)')
-          greenGrad.addColorStop(1, 'rgba(34,197,94,0)')
+          const greenGrad = ctx.createLinearGradient(0, 0, 0, 180);
+          greenGrad.addColorStop(0, 'rgba(34,197,94,0.25)');
+          greenGrad.addColorStop(1, 'rgba(34,197,94,0)');
+          const orangeGrad = ctx.createLinearGradient(0, 0, 0, 180);
+          orangeGrad.addColorStop(0, 'rgba(249,115,22,0.25)');
+          orangeGrad.addColorStop(1, 'rgba(249,115,22,0)');
 
-          // gradient ส้ม
-          const orangeGrad = ctx.createLinearGradient(0, 0, 0, 180)
-          orangeGrad.addColorStop(0, 'rgba(249,115,22,0.25)')
-          orangeGrad.addColorStop(1, 'rgba(249,115,22,0)')
           chartInst = new Chart(ctx, {
             type: 'line',
             data: {
@@ -1440,16 +1769,14 @@ hover:bg-red-100 active:scale-95 transition">
                 data: checkin,
                 borderColor: '#22c55e',
                 backgroundColor: greenGrad,
-                usePointStyle: true,
                 fill: true,
-                tension: 0.35,
+                tension: 0.45,
                 borderWidth: 3,
-                pointRadius: 4,
+                pointRadius: 0,
                 pointHoverRadius: 6,
                 pointBackgroundColor: '#fff',
                 pointBorderColor: '#22c55e',
                 pointBorderWidth: 2
-
               },
               {
                 label: 'พัสดุออก',
@@ -1457,30 +1784,214 @@ hover:bg-red-100 active:scale-95 transition">
                 borderColor: '#f97316',
                 backgroundColor: orangeGrad,
                 fill: true,
-                tension: 0.35,
+                tension: 0.45,
                 borderWidth: 3,
-                pointRadius: 4,
+                pointRadius: 0,
                 pointHoverRadius: 6,
                 pointBackgroundColor: '#fff',
                 pointBorderColor: '#f97316',
                 pointBorderWidth: 2
-              }
-              ]
+              }]
             },
             options: {
-              responsive: true, plugins: {
-                legend: {
-                  position: 'top',
-                  labels: {
-                    usePointStyle: true,     // ⭐ สำคัญ
-                    pointStyle: 'circle',    // ⭐ วงกลม
-                    boxWidth: 8,
-                    boxHeight: 8,
-                    padding: 12,
-                    font: { size: 11 }
-                  }
-                }
-              }, scales: { y: { beginAtZero: true } }
+              responsive: true,
+              interaction: { mode: 'index', intersect: false },
+              plugins: {
+                legend: { position: 'top', labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 8, boxHeight: 8, padding: 12, font: { size: 11 } } },
+                tooltip: { backgroundColor: 'rgba(255, 255, 255, 0.95)', titleColor: '#1e293b', bodyColor: '#475569', borderColor: '#e2e8f0', borderWidth: 1, padding: 12, cornerRadius: 8, boxPadding: 6, usePointStyle: true }
+              },
+              scales: {
+                x: { grid: { display: false } },
+                y: { beginAtZero: true, border: { display: false }, grid: { borderDash: [5, 5], color: '#f1f5f9' } }
+              }
+            }
+          });
+        }
+
+        /* ============================================================
+           Chart Mode Switcher
+        ============================================================ */
+
+        async function onChartModeChange() {
+          await loadSummaryChart();
+        }
+
+        async function loadSummaryChart() {
+          const mode = document.getElementById("chartModeSelect")?.value || "today";
+          const titleEl = document.getElementById("summaryChartTitle");
+
+          if (mode === "today") {
+            const now = new Date();
+            const thai = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Bangkok" }));
+            const dd = String(thai.getDate()).padStart(2, "0");
+            const mm = String(thai.getMonth() + 1).padStart(2, "0");
+            const yyyy = thai.getFullYear();
+            const todayStr = `${yyyy}${mm}${dd}`;
+
+            const res = await fetch(
+              `/api/reports/timeseries?period=hourly&start=${todayStr}&end=${todayStr}`,
+              { credentials: "include" }
+            );
+            const data = await res.json();
+            if (titleEl) titleEl.textContent = "สถิติพัสดุเข้า-ออก (วันนี้ รายชั่วโมง)";
+            renderChart(data.labels, data.checkin, data.checkout, "hourly");
+
+          } else if (mode === "week") {
+            const now = new Date();
+            const thai = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Bangkok" }));
+            const dow = thai.getDay();
+            const diffToMon = (dow === 0 ? -6 : 1 - dow);
+            const monday = new Date(thai);
+            monday.setDate(thai.getDate() + diffToMon);
+
+            const fmt = d => {
+              const dd = String(d.getDate()).padStart(2, "0");
+              const mm = String(d.getMonth() + 1).padStart(2, "0");
+              return `${d.getFullYear()}${mm}${dd}`;
+            };
+
+            const res = await fetch(
+              `/api/reports/timeseries?period=dayofweek&start=${fmt(monday)}&end=${fmt(thai)}`,
+              { credentials: "include" }
+            );
+            const data = await res.json();
+            if (titleEl) titleEl.textContent = "สถิติพัสดุเข้า-ออก (สัปดาห์นี้)";
+            renderChart(data.labels, data.checkin, data.checkout, "dayofweek");
+
+          } else {
+            const start = unslash(document.getElementById("r_start").value);
+            const end = unslash(document.getElementById("r_end").value);
+            if (!start || !end) return;
+
+            const res = await fetch(
+              `/api/reports/timeseries?period=daily&start=${start}&end=${end}`,
+              { credentials: "include" }
+            );
+            const data = await res.json();
+            if (titleEl) titleEl.textContent = "สถิติพัสดุเข้า-ออก (ตามช่วงที่เลือก)";
+            renderChart(data.labels, data.checkin, data.checkout, "daily");
+          }
+        }
+
+        async function renderAdvancedCharts(labels, checkin, checkout, adata, start, end) {
+          const period = 'daily';
+          const formattedLabels = labels.map(l => {
+            if (period === 'daily' && l.length === 8) return `${l.slice(6, 8)}/${l.slice(4, 6)}/${l.slice(0, 4)}`;
+            if (period === 'weekly' && l.includes('-W')) {
+              const [y, w] = l.split('-W');
+              return `สัปดาห์ที่ ${w}/${y}`;
+            }
+            if (period === 'dayofweek') {
+              const days = ['จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์', 'อาทิตย์'];
+              return days[parseInt(l)] || l;
+            }
+            if (period === 'monthly' && l.length === 6) return `${l.slice(4, 6)}/${l.slice(0, 4)}`;
+            return l;
+          });
+
+          // Grouped Bar Chart
+          const ctxGrouped = document.getElementById('groupedBarChart').getContext('2d');
+          if (groupedChartInst) groupedChartInst.destroy();
+          groupedChartInst = new Chart(ctxGrouped, {
+            type: 'bar',
+            data: {
+              labels: formattedLabels,
+              datasets: [{
+                label: 'พัสดุเข้า', data: checkin, backgroundColor: '#22c55e', borderRadius: 4, barPercentage: 0.8, categoryPercentage: 0.8
+              }, {
+                label: 'พัสดุออก', data: checkout, backgroundColor: '#f97316', borderRadius: 4, barPercentage: 0.8, categoryPercentage: 0.8
+              }]
+            },
+            options: {
+              responsive: true,
+              interaction: { mode: 'index', intersect: false },
+              plugins: {
+                legend: { position: 'top', labels: { usePointStyle: true, pointStyle: 'circle', padding: 12, font: { size: 11 } } },
+                tooltip: { backgroundColor: 'rgba(255, 255, 255, 0.95)', titleColor: '#1e293b', bodyColor: '#475569', borderColor: '#e2e8f0', borderWidth: 1, padding: 12, cornerRadius: 8, boxPadding: 6, usePointStyle: true }
+              },
+              scales: {
+                x: { grid: { display: false } },
+                y: { beginAtZero: true, border: { display: false }, grid: { borderDash: [5, 5], color: '#f1f5f9' } }
+              }
+            }
+          });
+
+          // Doughnut Chart
+          const ctxDoughnut = document.getElementById('doughnutChart').getContext('2d');
+          if (doughnutChartInst) doughnutChartInst.destroy();
+          doughnutChartInst = new Chart(ctxDoughnut, {
+            type: 'doughnut',
+            data: {
+              labels: adata.doughnut.labels,
+              datasets: [{
+                data: adata.doughnut.data,
+                backgroundColor: adata.doughnut.labels.map(label => {
+                  const n = label.toLowerCase();
+                  if (n.includes('flash')) return '#fde047'; // เหลืองอ่อน
+                  if (n.includes('j&t')) return '#ef4444';   // แดง
+                  if (n.includes('spx')) return '#ea580c';   // ส้มเข้ม
+                  if (n.includes('dhl')) return '#eab308';   // เหลืองเข้ม
+                  if (n.includes('kex') || n.includes('kerry')) return '#fb923c'; // ส้มอ่อน
+                  if (n.includes('lazada') || n.includes('lex')) return '#a855f7'; // ม่วง
+                  return '#94a3b8'; // อื่นๆ (เทา)
+                }),
+                borderWidth: 2,
+                borderColor: '#ffffff',
+                hoverOffset: 4
+              }]
+            },
+            options: {
+              responsive: true, maintainAspectRatio: false,
+              cutout: '65%',
+              plugins: {
+                legend: { position: 'right', labels: { usePointStyle: true, pointStyle: 'circle', padding: 10, font: { size: 11 } } },
+                tooltip: { backgroundColor: 'rgba(255, 255, 255, 0.95)', titleColor: '#1e293b', bodyColor: '#475569', borderColor: '#e2e8f0', borderWidth: 1, padding: 12, cornerRadius: 8 }
+              }
+            }
+          });
+
+          // Horizontal Bar Chart (Peak Hours) — ดึงจาก timeseries hourly เพื่อความถูกต้อง
+          try {
+            const phRes = await fetch(
+              `/api/reports/timeseries?period=hourly&start=${start}&end=${end}`,
+              { credentials: "include" }
+            );
+            const phData = await phRes.json();
+            // แปลง "07:00"  "07:00-08:00" ให้ตรงกับ format label เดิม
+            adata.peak_hours = {
+              labels: phData.labels.map(l => {
+                const h = parseInt(l);
+                return `${String(h).padStart(2, "0")}:00-${String(h + 1).padStart(2, "0")}:00`;
+              }),
+              data: phData.checkout
+            };
+          } catch (e) { /* fallback ใช้ adata.peak_hours เดิมถ้า fetch ล้มเหลว */ }
+
+          const ctxPeak = document.getElementById('peakHoursChart').getContext('2d');
+          if (peakChartInst) peakChartInst.destroy();
+          peakChartInst = new Chart(ctxPeak, {
+            type: 'bar',
+            data: {
+              labels: adata.peak_hours.labels,
+              datasets: [{
+                label: 'จำนวนพัสดุรับออก',
+                data: adata.peak_hours.data,
+                backgroundColor: '#f43f5e',
+                borderRadius: 4,
+                barPercentage: 0.7
+              }]
+            },
+            options: {
+              indexAxis: 'y',
+              responsive: true, maintainAspectRatio: false,
+              plugins: {
+                legend: { display: false },
+                tooltip: { backgroundColor: 'rgba(255, 255, 255, 0.95)', titleColor: '#1e293b', bodyColor: '#475569', borderColor: '#e2e8f0', borderWidth: 1, padding: 12, cornerRadius: 8 }
+              },
+              scales: {
+                x: { beginAtZero: true, border: { display: false }, grid: { borderDash: [5, 5], color: '#f1f5f9' } },
+                y: { grid: { display: false }, ticks: { font: { size: 10 } } }
+              }
             }
           });
         }
@@ -1518,7 +2029,10 @@ hover:bg-red-100 active:scale-95 transition">
         }
 
         /* initialize report values on load */
-        window.addEventListener('load', () => { if (document.querySelector('.tabBtn.active').dataset.tab === 'reports') initReports(); });
+        window.addEventListener('load', () => {
+          const activeTab = document.querySelector('.tabBtn.active');
+          if (activeTab && activeTab.dataset.tab === 'reports') initReports();
+        });
 
 
 
@@ -1630,7 +2144,7 @@ hover:bg-red-100 active:scale-95 transition">
           try {
 
             await confirmScanner.start(
-              { facingMode: confirmFacingMode }, // ✅ ใช้แบบเดียวกับ mainCamera
+              { facingMode: confirmFacingMode }, // ใช้แบบเดียวกับ mainCamera
               {
                 fps: 10,
                 qrbox: 250
@@ -1859,7 +2373,7 @@ hover:bg-red-100 active:scale-95 transition">
           fetch("/admin/logout", {
             credentials: "include"
           }).then(() => {
-            location.replace("/login_admin")   // 👈 replace ไม่ให้กดย้อน
+            location.replace("/login_admin")   // replace ไม่ให้กดย้อน
           })
         }
 
@@ -1892,6 +2406,15 @@ hover:bg-red-100 active:scale-95 transition">
             const recipientVal = document.getElementById("recipientSearch")?.value.trim();
             if (recipientVal) {
               params.append("recipient", recipientVal);
+            }
+
+            // ถ้าไม่มีการค้นหาใดๆ เลย ให้แสดงข้อความ
+            if (!queue && !recipientVal && !dateUI && (!status || status === "ทั้งหมด")) {
+              const box = document.getElementById("parcelList");
+              if (box) {
+                box.innerHTML = `<div class="text-sm text-gray-500 text-center py-4">กรุณากรอกเลขคิวหรือชื่อหน้ากล่อง</div>`;
+              }
+              return;
             }
 
 
@@ -1970,12 +2493,372 @@ ${recipientHtml}
           reportPage.classList.remove("hidden")
 
           await initReports()
-          loadReport()        // 👈 เพิ่มบรรทัดนี้
+          loadReport()        // เพิ่มบรรทัดนี้
         }
 
         function closeReportPage() {
           reportPage.classList.add("hidden")
           adminPage.classList.remove("hidden")
+        }
+
+        /* ============================================================
+           Dashboard Page
+        ============================================================ */
+
+        async function openDashboardPage() {
+          document.getElementById("moreMenu").classList.add("hidden");
+          adminPage.classList.add("hidden");
+          document.getElementById("dashboardPage").classList.remove("hidden");
+          await loadDashboard();
+        }
+
+        function closeDashboardPage() {
+          document.getElementById("dashboardPage").classList.add("hidden");
+          adminPage.classList.remove("hidden");
+        }
+
+        /* ไป stranded overlay */
+        function goToStranded() {
+          const strandedPage = document.getElementById("strandedPage");
+          if (strandedPage) {
+            closeDashboardPage();
+            openStrandedPage();
+          }
+        }
+
+        async function loadDashboard() {
+          /* ---- reset ---- */
+          ["db-kpi-wait", "db-kpi-in", "db-kpi-out",
+            "db-s-pending", "db-s-waiting", "db-s-done"].forEach(id => {
+              const el = document.getElementById(id);
+              if (el) el.textContent = "...";
+            });
+
+          try {
+            const res = await fetch("/api/dashboard/today", { credentials: "include" });
+            if (!res.ok) throw new Error("โหลดข้อมูลไม่สำเร็จ");
+            const d = await res.json();
+
+            /* ① KPI */
+            document.getElementById("db-kpi-wait").textContent = d.kpi.total_wait;
+            document.getElementById("db-kpi-in").textContent = d.kpi.total_in;
+            document.getElementById("db-kpi-out").textContent = d.kpi.total_out;
+
+            /* ② สถานะ */
+            document.getElementById("db-s-pending").textContent = d.status_breakdown.pending;
+            document.getElementById("db-s-waiting").textContent = d.status_breakdown.waiting;
+            document.getElementById("db-s-done").textContent = d.status_breakdown.done;
+
+
+            /* ④ Section utilization — 5×4 heatmap grid */
+            const secEl = document.getElementById("db-sections");
+            if (d.sections.length === 0) {
+              secEl.innerHTML = `<span class="text-xs text-gray-400 col-span-5">ไม่มีข้อมูล section</span>`;
+            } else {
+              secEl.innerHTML = d.sections.map((s, i) => {
+                const pct = Math.min(s.pct, 100);
+                // สีพื้นหลัง — เข้มขึ้นตามปริมาณ
+                let bg, fg, border;
+                if (pct >= 100) {
+                  bg = "#fca5a5"; fg = "#7f1d1d"; border = "#f87171";
+                } else if (pct >= 75) {
+                  bg = `hsl(48,${40 + pct * 0.6}%,${90 - pct * 0.2}%)`;
+                  fg = "#713f12"; border = "#fde047";
+                } else if (pct >= 25) {
+                  bg = `hsl(142,${30 + pct * 0.5}%,${88 - pct * 0.25}%)`;
+                  fg = "#14532d"; border = "#86efac";
+                } else {
+                  bg = "#f0fdf4"; fg = "#15803d"; border = "#bbf7d0";
+                }
+                const label = s.name;  // e.g. "1–50"
+                const sNum = i + 1;   // S1…S20
+                return `
+                  <div title="Section ${sNum}: ${s.used}/${s.total} (${pct}%)" style="background:${bg};border:1px solid ${border};" class="rounded-lg p-1.5 flex flex-col items-center justify-center gap-0.5 cursor-default select-none">
+                    <span style="color:${fg};" class="text-[9px] font-semibold leading-none opacity-70">S${sNum}</span>
+                    <span style="color:${fg};" class="text-[13px] font-bold leading-none">${pct}%</span>
+                    <span style="color:${fg};" class="text-[8px] leading-none opacity-60">${s.used}/${s.total}</span>
+                  </div>`;
+              }).join("");
+            }
+
+            /* ⑤ Alerts Injection */
+            const alertsContainer = document.getElementById("db-alerts-container");
+            if (alertsContainer) {
+              let alertsHtml = '';
+
+              // Static Stranded Alert
+              let sColor = d.stranded_30d > 0 ? "red" : "gray";
+              let sBg = d.stranded_30d > 0 ? "bg-red-50" : "bg-gray-50";
+              let sText = d.stranded_30d > 0 ? "text-red-500" : "text-gray-400";
+              let sTitle = d.stranded_30d > 0 ? "text-red-700" : "text-gray-600";
+
+              alertsHtml += `
+                <button onclick="goToStranded()" class="w-full flex items-center gap-3 bg-white border border-${sColor}-200 rounded-xl px-4 py-3 shadow-sm hover:${sBg} transition text-left">
+                  <div class="w-9 h-9 rounded-lg ${sBg} flex items-center justify-center flex-shrink-0">
+                    <span class="material-symbols-outlined ${sText} text-[18px]">inventory_2</span>
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <div class="text-sm font-medium ${sTitle}">พัสดุตกค้าง &gt;30 วัน</div>
+                    <div class="text-xs text-gray-400 mt-0.5">${d.stranded_30d > 0 ? `${d.stranded_30d} ชิ้น — แตะเพื่อดูรายการ` : 'ไม่มีพัสดุตกค้าง'}</div>
+                  </div>
+                  <span class="material-symbols-outlined text-gray-300 text-[18px]">chevron_right</span>
+                </button>
+              `;
+
+              // Dynamic Alerts from API
+              if (d.alerts && d.alerts.length > 0) {
+                d.alerts.forEach(alert => {
+                  let bg = `bg-${alert.color}-50`;
+                  let text = `text-${alert.color}-500`;
+                  let titleColor = `text-${alert.color}-700`;
+                  let border = `border-${alert.color}-200`;
+
+                  let actionBtn = "";
+                  if (alert.action === "force_confirm") {
+                    actionBtn = `
+                      <button onclick="event.stopPropagation(); forceConfirmPending()" class="ml-auto bg-orange-500 hover:bg-orange-600 text-white text-xs px-3 py-1.5 rounded-lg shadow-sm transition active:scale-95 whitespace-nowrap">
+                        ยืนยันทั้งหมด
+                      </button>
+                    `;
+                  }
+
+                  alertsHtml += `
+                    <div class="w-full flex items-center gap-3 bg-white border ${border} rounded-xl px-4 py-3 shadow-sm text-left">
+                      <div class="w-9 h-9 rounded-lg ${bg} flex items-center justify-center flex-shrink-0">
+                        <span class="material-symbols-outlined ${text} text-[18px]">${alert.icon || 'notifications'}</span>
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <div class="text-sm font-medium ${titleColor}">${alert.title}</div>
+                        <div class="text-xs text-gray-400 mt-0.5">${alert.message}</div>
+                      </div>
+                      ${actionBtn}
+                    </div>
+                  `;
+                });
+              }
+              alertsContainer.innerHTML = alertsHtml;
+            }
+
+            /* timestamp */
+            const now = new Date(d.generated_at);
+            const hh = String(now.getHours()).padStart(2, "0");
+            const mm = String(now.getMinutes()).padStart(2, "0");
+            const updEl = document.getElementById("db-updated");
+            if (updEl) updEl.textContent = `อัปเดตล่าสุด ${hh}:${mm} น.`;
+
+          } catch (err) {
+            ["db-kpi-wait", "db-kpi-in", "db-kpi-out"].forEach(id => {
+              const el = document.getElementById(id);
+              if (el) el.textContent = "!";
+            });
+            const updEl = document.getElementById("db-updated");
+            if (updEl) updEl.textContent = `โหลดไม่สำเร็จ: ${err.message}`;
+          }
+        }
+
+        async function forceConfirmPending() {
+          if (!confirm("ยืนยันพัสดุสถานะ 'กำลังรอ' ทั้งหมดเป็น 'ยังไม่ได้รับ' ใช่หรือไม่?")) return;
+          try {
+            const res = await fetch("/api/dashboard/force_confirm_pending", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" }
+            });
+            const data = await res.json();
+            if (data.ok) {
+              alert(`สำเร็จ! ยืนยันพัสดุทั้งหมด ${data.count} ชิ้น`);
+              loadDashboard();
+            } else {
+              alert(data.message || "เกิดข้อผิดพลาด");
+            }
+          } catch (err) {
+            alert("Error: " + err.message);
+          }
+        }
+
+        /* ============================================================
+           Stranded Page
+        ============================================================ */
+        let currentStrandedDays = 30;
+
+        async function openStrandedPage() {
+          console.log("[stranded] openStrandedPage called");
+          document.getElementById("moreMenu").classList.add("hidden");
+          adminPage.classList.add("hidden");
+          document.getElementById("strandedPage").classList.remove("hidden");
+
+          // reset dropdown to default
+          const sel = document.getElementById("strandedDaysSelect");
+          sel.value = "30";
+          document.getElementById("strandedCustomWrap").classList.add("hidden");
+          currentStrandedDays = 30;
+
+          await loadStrandedParcels(currentStrandedDays);
+        }
+
+        function closeStrandedPage() {
+          document.getElementById("strandedPage").classList.add("hidden");
+          adminPage.classList.remove("hidden");
+        }
+
+        function exportStrandedParcels() {
+          window.location.href = `/api/reports/stranded/export?days=${currentStrandedDays}`;
+        }
+
+        function onStrandedSelectChange() {
+          const sel = document.getElementById("strandedDaysSelect");
+          const customWrap = document.getElementById("strandedCustomWrap");
+
+          if (sel.value === "custom") {
+            customWrap.classList.remove("hidden");
+            document.getElementById("strandedCustomDays").focus();
+            return;
+          }
+
+          customWrap.classList.add("hidden");
+          currentStrandedDays = parseInt(sel.value);
+          loadStrandedParcels(currentStrandedDays);
+        }
+
+        function applyCustomStrandedDays() {
+          const input = document.getElementById("strandedCustomDays");
+          const val = parseInt(input.value);
+          if (!val || val < 1) {
+            alert("กรุณาระบุจำนวนวัน (ตั้งแต่ 1 ขึ้นไป)");
+            return;
+          }
+          currentStrandedDays = val;
+          loadStrandedParcels(val);
+        }
+
+        // Enter key on custom input
+        document.addEventListener("DOMContentLoaded", () => {
+          const customInput = document.getElementById("strandedCustomDays");
+          if (customInput) {
+            customInput.addEventListener("keypress", (e) => {
+              if (e.key === "Enter") applyCustomStrandedDays();
+            });
+          }
+        });
+
+        async function loadStrandedParcels(days) {
+          const summaryEl = document.getElementById("strandedSummary");
+          const listEl = document.getElementById("strandedList");
+
+          summaryEl.innerHTML = `<div class="text-sm text-gray-400 text-center py-4">กำลังโหลด...</div>`;
+          listEl.innerHTML = "";
+
+          try {
+            console.log(`[stranded] fetching /api/reports/stranded?days=${days}`);
+            const res = await fetch(`/api/reports/stranded?days=${days}`, { credentials: "include" });
+            console.log(`[stranded] response status: ${res.status}`);
+            if (!res.ok) throw new Error(`โหลดข้อมูลไม่สำเร็จ (status ${res.status})`);
+            const data = await res.json();
+            console.log("[stranded] data:", data);
+
+            // --- Summary card ---
+            const label = `${days} วัน`;
+            summaryEl.innerHTML = `
+              <div class="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3">
+                <span class="material-symbols-outlined text-red-500 text-[28px]">warning</span>
+                <div>
+                  <div class="text-sm text-red-600 font-medium">พัสดุตกค้างมากกว่า ${label}</div>
+                  <div class="text-2xl font-bold text-red-700">${data.total} ชิ้น</div>
+                </div>
+              </div>`;
+
+            // show/hide select bar & hold button
+            const selectBar = document.getElementById("strandedSelectBar");
+            const addHoldBtn = document.getElementById("addToHoldBtn");
+            if (data.total === 0) {
+              listEl.innerHTML = `
+                <div class="text-center text-gray-400 text-sm py-10">
+                  <span class="material-symbols-outlined text-[40px] block mb-2">inventory_2</span>
+                  ไม่มีพัสดุตกค้าง
+                </div>`;
+              selectBar.classList.add("hidden");
+              addHoldBtn.hidden = true;
+              return;
+            }
+
+            selectBar.classList.remove("hidden");
+            addHoldBtn.hidden = false;
+            // reset select-all
+            document.getElementById("strandedSelectAll").checked = false;
+            updateStrandedSelectedCount();
+
+            // --- Grouped by date ---
+            const html = data.groups.map(group => {
+              // แปลง YYYY-MM-DD  DD/MM/YYYY (พ.ศ.)
+              const [y, m, d] = group.date.split("-");
+              const be_year = parseInt(y) + 543;
+              const dateLabel = `${d}/${m}/${be_year}`;
+
+              const rows = group.items.map(p => {
+                // badge สีตามจำนวนวันที่ค้าง
+                let badgeCls = "bg-yellow-100 text-yellow-700";
+                if (p.days_stranded >= 180) badgeCls = "bg-red-100 text-red-700";
+                else if (p.days_stranded >= 90) badgeCls = "bg-orange-100 text-orange-700";
+
+                const name = p.unofficial_recipient || p.recipient_name || "-";
+
+                return `
+                  <div class="bg-white rounded-xl border border-gray-100 px-4 py-3 flex gap-3 shadow-sm stranded-card" data-id="${p.id}">
+                    <!-- checkbox -->
+                    <label class="flex items-start pt-1 cursor-pointer">
+                      <input type="checkbox" class="stranded-cb w-4 h-4 accent-amber-500 rounded" value="${p.id}"
+                             onchange="onStrandedCbChange()">
+                    </label>
+                    <div class="flex-1 flex flex-col gap-1">
+                      <div class="flex items-center justify-between">
+                        <span class="text-xs font-mono text-gray-700 break-all">${escapeHtml(p.tracking_number)}</span>
+                        <span class="text-xs px-2 py-0.5 rounded-full font-medium ${badgeCls} ml-2 whitespace-nowrap">
+                          ${p.days_stranded} วัน
+                        </span>
+                      </div>
+                      <!-- ชื่อหน้ากล่อง highlight -->
+                      <div class="flex items-center gap-1.5">
+                        <span class="material-symbols-outlined text-purple-400 text-[15px]">badge</span>
+                        ${name !== "-"
+                    ? `<span class="text-sm font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-lg border border-purple-200">${escapeHtml(name)}</span>`
+                    : `<span class="text-xs text-gray-400 italic">ไม่ระบุชื่อ</span>`
+                  }
+                      </div>
+                      <div class="flex gap-4 text-xs text-gray-500">
+                        <span>เลขคิว <span class="font-semibold text-gray-700">${escapeHtml(p.queue_number ?? "-")}</span></span>
+                        <span>เข้าเมื่อ: <span class="font-semibold text-gray-700">${formatThaiDate(p.created_at)}</span></span>
+                      </div>
+                    </div>
+                  </div>`;
+              }).join("");
+
+              return `
+                <div class="mb-5">
+                  <div class="flex items-center gap-2 mb-2 px-1">
+                    <input type="checkbox" class="w-4 h-4 accent-amber-500 rounded cursor-pointer"
+                           onchange="toggleStrandedGroup('${group.date}', this.checked)">
+                    <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                      วันที่ ${dateLabel} (${group.items.length} ชิ้น)
+                    </div>
+                  </div>
+                  <div class="flex flex-col gap-2" id="stranded-group-${group.date}">${rows}</div>
+                </div>`;
+            }).join("");
+
+            listEl.innerHTML = html;
+
+          } catch (err) {
+            summaryEl.innerHTML = `<div class="text-sm text-red-400 text-center py-4">${err.message}</div>`;
+          }
+        }
+
+        /* helper: ISO string → DD/MM/YYYY+543 */
+        function formatThaiDate(iso) {
+          if (!iso) return "-";
+          const dt = new Date(iso);
+          const d = String(dt.getDate()).padStart(2, "0");
+          const m = String(dt.getMonth() + 1).padStart(2, "0");
+          const y = dt.getFullYear() + 543;
+          return `${d}/${m}/${y}`;
         }
         function formatSlash(el) {
           if (!el.value) return;
@@ -2052,17 +2935,33 @@ ${recipientHtml}
           const mm = String(thai.getMonth() + 1).padStart(2, "0")
           const yyyy = thai.getFullYear()
 
-          // ✅ ต้องมี backtick
-          const todaySlash = `${dd}/${mm}/${yyyy}`
-
+          // ต้องมี backtick
+          const todayISO = `${yyyy}-${mm}-${dd}`
           const dateInput = document.getElementById("dateFilter")
           if (dateInput) {
-            dateInput.value = todaySlash
+            dateInput.value = todayISO
           }
 
-          // โหลดพัสดุของวันนี้ทันที
-          loadWaitingParcels()
+          // แสดงข้อความเริ่มต้นแทนการโหลดพัสดุอัตโนมัติ
+          const box = document.getElementById("parcelList");
+          if (box) {
+            box.innerHTML = `<div class="text-sm text-gray-500 text-center py-4">กรุณากรอกเลขคิวหรือชื่อหน้ากล่อง</div>`;
+          }
         }
+
+        function openCalendar() {
+    const input = document.getElementById("dateFilter");
+
+    input.value = "";
+
+    input.focus();
+
+    if (input.showPicker) {
+        input.showPicker();
+    } else {
+        input.click();
+    }
+}
 
         function toggleMoreMenu() {
           document.getElementById("moreMenu").classList.toggle("hidden");
@@ -2089,12 +2988,12 @@ ${recipientHtml}
         }
 
         function closeCancelPopup() {
-  cancelTrackingNo = "";
-  document.getElementById("cancelTracking").textContent = "";
+          cancelTrackingNo = "";
+          document.getElementById("cancelTracking").textContent = "";
 
-  cancelPickupPopup.classList.add("hidden");
-  cancelPickupPopup.classList.remove("flex");
-}
+          cancelPickupPopup.classList.add("hidden");
+          cancelPickupPopup.classList.remove("flex");
+        }
         async function confirmCancelPickup() {
 
           try {
@@ -2135,18 +3034,319 @@ ${recipientHtml}
 
           }
         }
+      </script>
 
-        function openCalendar() {
+      <!-- ============================================================
+           Hold List JavaScript
+      ============================================================ -->
+      <script>
+        /* ---- Stranded page: checkbox helpers ---- */
 
-    const input = document.getElementById("dateFilter");
+        function onStrandedCbChange() {
+          updateStrandedSelectedCount();
+          const all = document.querySelectorAll(".stranded-cb");
+          const checked = document.querySelectorAll(".stranded-cb:checked");
+          const selectAllCb = document.getElementById("strandedSelectAll");
+          if (selectAllCb) {
+            selectAllCb.checked = all.length > 0 && checked.length === all.length;
+            selectAllCb.indeterminate = checked.length > 0 && checked.length < all.length;
+          }
+        }
 
-    input.showPicker();   // เปิดปฏิทิน
+        function toggleStrandedGroup(dateKey, checked) {
+          const container = document.getElementById(`stranded-group-${dateKey}`);
+          if (container) {
+            container.querySelectorAll('.stranded-cb').forEach(cb => { cb.checked = checked; });
+            onStrandedCbChange();
+          }
+        }
 
-    input.onchange = () => {
-        loadWaitingParcels();
-    };
+        function toggleSelectAllStranded(checked) {
+          document.querySelectorAll(".stranded-cb").forEach(cb => { cb.checked = checked; });
+          updateStrandedSelectedCount();
+        }
 
-}
+        function updateStrandedSelectedCount() {
+          const checked = document.querySelectorAll(".stranded-cb:checked");
+          const countEl = document.getElementById("strandedSelectedCount");
+          if (countEl) {
+            countEl.textContent = checked.length > 0 ? `เลือกแล้ว ${checked.length} รายการ` : "";
+          }
+        }
+
+        function getSelectedStrandedIds() {
+          return Array.from(document.querySelectorAll(".stranded-cb:checked"))
+            .map(cb => parseInt(cb.value));
+        }
+
+        async function addStrandedToHold() {
+          const ids = getSelectedStrandedIds();
+          if (ids.length === 0) {
+            alert("กรุณาเลือกพัสดุอย่างน้อย 1 รายการ");
+            return;
+          }
+          if (!confirm(`เพิ่มพัสดุที่เลือก ${ids.length} รายการเข้า Hold List ใช่หรือไม่?`)) return;
+
+          try {
+            const res = await fetch("/api/parcels/hold", {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ parcel_ids: ids })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || "เพิ่มเข้า Hold ไม่สำเร็จ");
+            alert(`เพิ่มเข้า Hold List เรียบร้อย ${data.updated} รายการ`);
+            loadStrandedParcels(currentStrandedDays);
+          } catch (err) {
+            alert("เกิดข้อผิดพลาด: " + err.message);
+          }
+        }
+
+        /* ---- Hold List page ---- */
+
+        async function openHoldListPage() {
+          document.getElementById("moreMenu").classList.add("hidden");
+          adminPage.classList.add("hidden");
+          document.getElementById("holdListPage").classList.remove("hidden");
+          await loadHoldList();
+        }
+
+        function closeHoldListPage() {
+          document.getElementById("holdListPage").classList.add("hidden");
+          adminPage.classList.remove("hidden");
+        }
+
+        async function refreshHoldList() {
+          await loadHoldList();
+        }
+
+        async function loadHoldList() {
+          const summaryEl = document.getElementById("holdSummary");
+          const listEl = document.getElementById("holdList");
+          const actionBar = document.getElementById("holdActionBar");
+          const selectBar = document.getElementById("holdSelectBar");
+
+          summaryEl.innerHTML = `<div class="text-sm text-gray-400 text-center py-4">กำลังโหลด...</div>`;
+          listEl.innerHTML = "";
+          actionBar.classList.add("hidden");
+          selectBar.classList.add("hidden");
+
+          try {
+            const res = await fetch("/api/parcels/hold", { credentials: "include" });
+            if (!res.ok) throw new Error(`โหลดข้อมูลไม่สำเร็จ (status ${res.status})`);
+            const data = await res.json();
+
+            let unreceivedCount = 0;
+            let receivedCount = 0;
+            if (data.groups) {
+              data.groups.forEach(g => {
+                g.items.forEach(p => {
+                  if (p.received) receivedCount++;
+                  else unreceivedCount++;
+                });
+              });
+            }
+
+            summaryEl.innerHTML = `
+              <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
+                <span class="material-symbols-outlined text-amber-500 text-[28px]">inventory</span>
+                <div>
+                  <div class="text-sm text-amber-700 font-medium">พัสดุใน Hold List ทั้งหมด</div>
+                  <div class="text-2xl font-bold text-amber-800">${data.total} ชิ้น</div>
+                  <div class="text-xs text-amber-600 mt-0.5">ยังไม่รับ ${unreceivedCount} · รับแล้ว ${receivedCount}</div>
+                </div>
+              </div>`;
+
+            if (data.total === 0) {
+              listEl.innerHTML = `
+                <div class="text-center text-gray-400 text-sm py-10">
+                  <span class="material-symbols-outlined text-[40px] block mb-2">inventory</span>
+                  ไม่มีพัสดุใน Hold List
+                </div>`;
+              return;
+            }
+
+            selectBar.classList.remove("hidden");
+            document.getElementById("holdSelectAll").checked = false;
+            updateHoldSelectedCount();
+
+            const html = data.groups.map(group => {
+              const [y, m, d] = group.date.split("-");
+              const be_year = parseInt(y) + 543;
+              const dateLabel = `${d}/${m}/${be_year}`;
+
+              const rows = group.items.map(p => {
+                const name = p.unofficial_recipient || p.recipient_name || "-";
+                const receivedBadge = p.received
+                  ? `<span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">รับแล้ว</span>`
+                  : `<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">ยังไม่รับ</span>`;
+
+                let ageBadgeCls = "bg-yellow-100 text-yellow-700";
+                if (p.days_stranded >= 180) ageBadgeCls = "bg-red-100 text-red-700";
+                else if (p.days_stranded >= 90) ageBadgeCls = "bg-orange-100 text-orange-700";
+
+                return `
+                  <div class="bg-white rounded-xl border border-gray-100 px-4 py-3 flex gap-3 shadow-sm mb-2" data-id="${p.id}" data-received="${p.received}">
+                    <label class="flex items-start pt-1 cursor-pointer">
+                      <input type="checkbox" class="hold-cb w-4 h-4 accent-amber-500 rounded" value="${p.id}"
+                             onchange="onHoldCbChange()">
+                    </label>
+                    <div class="flex-1 flex flex-col gap-1">
+                      <div class="flex items-center justify-between gap-2 flex-wrap">
+                        <span class="text-xs font-mono text-gray-700 break-all flex-1">${escapeHtml(p.tracking_number)}</span>
+                        <div class="flex gap-1 flex-shrink-0">
+                          ${receivedBadge}
+                          <span class="text-xs px-2 py-0.5 rounded-full font-medium ${ageBadgeCls}">${p.days_stranded} วัน</span>
+                        </div>
+                      </div>
+                      <div class="flex items-center gap-1.5">
+                        <span class="material-symbols-outlined text-purple-400 text-[15px]">badge</span>
+                        ${name !== "-"
+                    ? `<span class="text-sm font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-lg border border-purple-200">${escapeHtml(name)}</span>`
+                    : `<span class="text-xs text-gray-400 italic">ไม่ระบุชื่อ</span>`}
+                      </div>
+                      <div class="flex gap-4 text-xs text-gray-500">
+                        <span>เลขคิว <span class="font-semibold text-gray-700">${escapeHtml(p.queue_number ?? "-")}</span></span>
+                        <span>เข้าเมื่อ: <span class="font-semibold text-gray-700">${formatThaiDate(p.created_at)}</span></span>
+                      </div>
+                    </div>
+                  </div>`;
+              }).join("");
+
+              return `
+                <div class="mb-5">
+                  <div class="flex items-center gap-2 mb-2 px-1">
+                    <input type="checkbox" class="w-4 h-4 accent-amber-500 rounded cursor-pointer"
+                           onchange="toggleHoldGroup('${group.date}', this.checked)">
+                    <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                      วันที่ ${dateLabel} (${group.items.length} ชิ้น)
+                    </div>
+                  </div>
+                  <div class="flex flex-col gap-2" id="hold-group-${group.date}">${rows}</div>
+                </div>`;
+            }).join("");
+
+            listEl.innerHTML = html;
+
+          } catch (err) {
+            summaryEl.innerHTML = `<div class="text-sm text-red-400 text-center py-4">${err.message}</div>`;
+          }
+        }
+
+        /* ---- Hold List checkbox helpers ---- */
+
+        function onHoldCbChange() {
+          updateHoldSelectedCount();
+          const all = document.querySelectorAll(".hold-cb");
+          const checked = document.querySelectorAll(".hold-cb:checked");
+          const selectAllCb = document.getElementById("holdSelectAll");
+          if (selectAllCb) {
+            selectAllCb.checked = all.length > 0 && checked.length === all.length;
+            selectAllCb.indeterminate = checked.length > 0 && checked.length < all.length;
+          }
+        }
+
+        function toggleSelectAllHold(checked) {
+          document.querySelectorAll(".hold-cb").forEach(cb => { cb.checked = checked; });
+          updateHoldSelectedCount();
+        }
+
+        function toggleHoldGroup(dateKey, checked) {
+          const container = document.getElementById(`hold-group-${dateKey}`);
+          if (container) {
+            container.querySelectorAll('.hold-cb').forEach(cb => { cb.checked = checked; });
+            onHoldCbChange();
+          }
+        }
+
+        function updateHoldSelectedCount() {
+          const checked = document.querySelectorAll(".hold-cb:checked");
+          const countEl = document.getElementById("holdSelectedCount");
+          const actionBar = document.getElementById("holdActionBar");
+          if (countEl) {
+            countEl.textContent = checked.length > 0 ? `เลือกแล้ว ${checked.length} รายการ` : "";
+          }
+          if (actionBar) {
+            if (checked.length > 0) {
+              actionBar.classList.remove("hidden");
+            } else {
+              actionBar.classList.add("hidden");
+            }
+          }
+        }
+
+        function getSelectedHoldIds() {
+          return Array.from(document.querySelectorAll(".hold-cb:checked"))
+            .map(cb => parseInt(cb.value));
+        }
+
+        async function unmarkHoldParcels() {
+          const ids = getSelectedHoldIds();
+          if (ids.length === 0) {
+            alert("กรุณาเลือกพัสดุอย่างน้อย 1 รายการเพื่อนำออก");
+            return;
+          }
+          if (!confirm(`ต้องการนำพัสดุที่เลือก ${ids.length} รายการออกจาก Hold List ใช่หรือไม่?`)) return;
+
+          try {
+            const res = await fetch("/api/parcels/unhold", {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ parcel_ids: ids })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || "นำออกไม่สำเร็จ");
+            alert(`นำออกจาก Hold List เรียบร้อย ${data.updated} รายการ`);
+            await loadHoldList();
+
+            // refresh stranded list too in the background
+            loadStrandedParcels(currentStrandedDays);
+          } catch (err) {
+            alert("เกิดข้อผิดพลาด: " + err.message);
+          }
+        }
+
+        async function deleteUnreceivedHold() {
+          const ids = getSelectedHoldIds();
+          if (ids.length === 0) {
+            alert("กรุณาเลือกพัสดุอย่างน้อย 1 รายการเพื่อลบ");
+            return;
+          }
+
+          // filter only unreceived from selected
+          const unreceivedIds = Array.from(document.querySelectorAll(".hold-cb:checked"))
+            .filter(cb => cb.closest('[data-received="false"]'))
+            .map(cb => parseInt(cb.value));
+
+          if (unreceivedIds.length === 0) {
+            alert("รายการที่เลือกทั้งหมดถูก 'รับแล้ว' จึงไม่สามารถลบได้");
+            return;
+          }
+
+          if (unreceivedIds.length < ids.length) {
+            if (!confirm(`คุณเลือก ${ids.length} รายการ แต่มีเพียง ${unreceivedIds.length} รายการที่ 'ยังไม่รับ'\nต้องการดำเนินการลบเฉพาะ ${unreceivedIds.length} รายการนี้ใช่หรือไม่?`)) return;
+          } else {
+            if (!confirm(`ต้องการลบพัสดุที่ยังไม่รับจำนวน ${unreceivedIds.length} รายการ ใช่หรือไม่?\n(การกระทำนี้ไม่สามารถยกเลิกได้)`)) return;
+          }
+
+          try {
+            const delRes = await fetch("/api/parcels/hold", {
+              method: "DELETE",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ parcel_ids: unreceivedIds })
+            });
+            const delData = await delRes.json();
+            if (!delRes.ok) throw new Error(delData.detail || "ลบไม่สำเร็จ");
+
+            alert(`ลบเรียบร้อย ${delData.deleted} รายการ`);
+            await loadHoldList();
+          } catch (err) {
+            alert("เกิดข้อผิดพลาด: " + err.message);
+          }
+        }
       </script>
 
       <script>
